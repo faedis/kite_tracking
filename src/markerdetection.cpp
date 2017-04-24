@@ -175,8 +175,8 @@ public:
 				pixelpos.y = centerCenter.y;
 			}
 			else{
-				pixelpos.x = 320;
-				pixelpos.y = 180;
+				pixelpos.x = -1;
+				pixelpos.y = -1;
 				knowcenterflag = false;
 				detectflag = false;
 			}
@@ -184,8 +184,8 @@ public:
 		else{
 			knowcenterflag = false;
 			detectflag = false;
-			pixelpos.x = 320;
-			pixelpos.y = 180;
+			pixelpos.x = -1;
+			pixelpos.y = -1;
 			pixelpos.theta = 0;
 		}
 
@@ -234,6 +234,7 @@ public:
 		focusmeasure = LaplaceVarFocus(grayFrame(cv::Rect(round(pixelpos.x-4*fandzmsg.data[2]/2.0),round(pixelpos.y-4*fandzmsg.data[2]/2.0), round(4*fandzmsg.data[2]), round(4*fandzmsg.data[2]))&cv::Rect(0,0,639,359)));
 		}
 		else focusmeasure = LaplaceVarFocus(grayFrame);
+
 		fandzmsg.data[0] = detectflag;
 		fandzmsg.data[1] = focusmeasure;
 		fandzmsg.data[3] = knowcenterflag;

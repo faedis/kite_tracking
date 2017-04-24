@@ -89,6 +89,7 @@ void Kalman::kalman(double measurement){
 class LQR{
 	ros::NodeHandle nh_;
 	ros::Subscriber pixelpos_sub_;
+	ros::Subscriber comparedpixelpos_sub_;
 	ros::Subscriber waitkey_sub_;
 	ros::Subscriber shutdownkey_sub_;
 	ros::Subscriber ptupos_sub_;
@@ -200,7 +201,8 @@ My2 = 10.7716;//10.7716,
 
 public:
 	LQR(){
-		pixelpos_sub_ = nh_.subscribe("pixelpos",1,&LQR::pixelposCb,this);
+//		pixelpos_sub_ = nh_.subscribe("pixelpos",1,&LQR::pixelposCb,this);
+		comparedpixelpos_sub_ = nh_.subscribe("comparedpixelpos",1,&LQR::comparedpixelposCb,this);
 		waitkey_sub_  = nh_.subscribe("waitkey",1,&LQR::waitkeyCb,this);
 		shutdownkey_sub_ = nh_.subscribe("shutdownkey",1,&LQR::shutdownCb,this);
 		ptupos_sub_ = nh_.subscribe("ptupos",1,&LQR::ptuposCb,this);
@@ -213,15 +215,22 @@ public:
 	}
 	~LQR(){
 	}
-	void pixelposCb(const geometry_msgs::Pose2D::ConstPtr& pixelpos){
+//	void pixelposCb(const geometry_msgs::Pose2D::ConstPtr& pixelpos){
+	void comparedpixelposCb(const geometry_msgs::Pose2D::ConstPtr& comparedpixelpos){
 		if(ptuposarrived){
-			pixelX = pixelpos->x;
-			pixelY = pixelpos->y;
-			tsize = pixelpos->theta;
+			pixelX = comparedpixelpos->x;
+			pixelY = comparedpixelpos->y;
+			tsize = comparedpixelpos->theta;
+			if(pixelX>=0){
 			// assign errors
 			eX = -alphaX * (double)(pixelX - hWidth) / (double)hWidth;
 			eY = -alphaY * (double)(pixelY - hHeight) / (double)hHeight;
-
+			}
+			else{
+				eX = 0.8*eX;
+				eY = 0.8*eY;
+			}
+		
 
 
 			// update and publish target position if all information has arrvied

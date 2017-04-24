@@ -161,6 +161,12 @@ target_link_libraries(arduinoserialcom_node
   ${catkin_LIBRARIES}
 )
 
+add_executable(kcftracker_node src/KCFtracker.cpp)
+target_link_libraries(kcftracker_node
+  ${OpenCV_LIBRARIES}
+  ${catkin_LIBRARIES}
+)
+
 # use c++11
 add_definitions(-std=c++11)
 ## Declare a C++ library
