@@ -25,6 +25,7 @@ class ImageShow{
 	image_transport::ImageTransport it_;
 	image_transport::Subscriber image_sub_;
 	ros::Subscriber pixelpos_sub_;
+	ros::Subscriber comparedpixelpos_sub_;
 	ros::Subscriber target_size_sub_;
 	ros::Subscriber focus_and_zoom_sub_;
 	ros::Publisher waitkey_pub_;
@@ -41,8 +42,8 @@ public:
 	ImageShow() : it_(nh_) {
 		image_sub_ = it_.subscribe("/camera/image_raw",1,
 			&ImageShow::imageCb, this);
-		pixelpos_sub_ = nh_.subscribe("pixelpos",1,
-			&ImageShow::pixelposCb,this);
+//		pixelpos_sub_ = nh_.subscribe("pixelpos",1, &ImageShow::pixelposCb,this);
+		comparedpixelpos_sub_ = nh_.subscribe("comparedpixelpos",1, &ImageShow::comparedpixelposCb,this);
 		focus_and_zoom_sub_ = nh_.subscribe("fandzmsg",1,&ImageShow::displayDetCb, this);
 		waitkey_pub_ = nh_.advertise<std_msgs::Int8>("waitkey",1);
 		shutdownkey_pub_ = nh_.advertise<std_msgs::Bool>("shutdownkey",1);
@@ -85,12 +86,17 @@ public:
 		pixelX = pixelpos->x;
 		pixelY = pixelpos->y;
 	}
+	void comparedpixelposCb(const geometry_msgs::Pose2D::ConstPtr& comparedpixelpos){
+		pixelX = comparedpixelpos->x;
+		pixelY = comparedpixelpos->y;
+	}
 	void displayDetCb(const std_msgs::Float32MultiArray::ConstPtr& fandzmsg){
 		if(!frame.empty()){
 			tsize = fandzmsg->data[2];
+			if(pixelX>=0){
 			cv::rectangle(frame, cv::Rect(round(pixelX-tsize/2.0),round(pixelY-tsize/2.0), round(tsize), round(tsize))&cv::Rect(0,0,frWidth-1,frHeight-1),
 				cv::Scalar(0,0,255),2,8,0);
-
+			}
 			cv::imshow(winNamedet,frame);
 			cv::waitKey(1);
 		}
