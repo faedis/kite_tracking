@@ -1,5 +1,6 @@
 #include <ros/ros.h>
 #include <std_msgs/Int8.h>
+#include <std_msgs/Int16.h>
 #include <std_msgs/Bool.h>
 #include <geometry_msgs/Pose2D.h>
 #include <sys/time.h>
@@ -12,6 +13,8 @@
 #include <iomanip>
 #include <vector>
 #include <algorithm>
+#include <map>
+#include <iterator>
 
 //Specific input signal
 std::vector<double> uspec;
@@ -93,6 +96,7 @@ class LQR{
 	ros::Subscriber waitkey_sub_;
 	ros::Subscriber shutdownkey_sub_;
 	ros::Subscriber ptupos_sub_;
+	ros::Subscriber zoomlevel_sub_;
 	ros::Publisher ptucmd_pub_;
 	ros::Publisher targetpos_pub_;
 private:
@@ -104,6 +108,9 @@ Kalman
 	kry,
 	kx,
 	ky;
+// angle of view mapping
+std::map<int,double> mapAngleOfViewX;
+std::map<int,double> mapAngleOfViewY;
 
 std::ofstream myfile;
 int filenumber = 0;
@@ -200,18 +207,25 @@ My2 = 10.7716;//10.7716,
 
 
 public:
-	LQR(){
+	LQR(std::vector<int>& zoomLevelVec, std::vector<double>& angleOfViewXVec, std::vector<double>& angleOfViewYVec){
 //		pixelpos_sub_ = nh_.subscribe("pixelpos",1,&LQR::pixelposCb,this);
 		comparedpixelpos_sub_ = nh_.subscribe("comparedpixelpos",1,&LQR::comparedpixelposCb,this);
 		waitkey_sub_  = nh_.subscribe("waitkey",1,&LQR::waitkeyCb,this);
 		shutdownkey_sub_ = nh_.subscribe("shutdownkey",1,&LQR::shutdownCb,this);
 		ptupos_sub_ = nh_.subscribe("ptupos",1,&LQR::ptuposCb,this);
+		zoomlevel_sub_ = nh_.subscribe("zoomlevel",1,&LQR::zoomlevelCb,this);
 		ptucmd_pub_ = nh_.advertise<geometry_msgs::Pose2D>("ptucmd",1);
 		targetpos_pub_ = nh_.advertise<geometry_msgs::Pose2D>("targetpos",1);
 		kx.kalmanInit(Ts, Mx1, Mx2);
 		ky.kalmanInit(Ts, My1, My2);
 		krx.kalmanInit(Ts, Mx1, Mx2);
 		kry.kalmanInit(Ts,My1, My2);
+
+		// angle of view mapping
+		for(int i = 0; i<zoomLevelVec.size(); i++){
+			mapAngleOfViewX.insert(std::make_pair(zoomLevelVec[i], angleOfViewXVec[i]));
+			mapAngleOfViewY.insert(std::make_pair(zoomLevelVec[i], angleOfViewYVec[i]));
+		}
 	}
 	~LQR(){
 	}
@@ -229,8 +243,9 @@ public:
 			else{
 				eX = 0.8*eX;
 				eY = 0.8*eY;
+			pixelX = hWidth;
+			pixelY = hHeight;
 			}
-		
 
 
 			// update and publish target position if all information has arrvied
@@ -377,7 +392,7 @@ public:
 				}
 
 				// Examine only pan
-				uY = 0;
+				//uY = 0;
 
 				uXrad = round(uX)*pRes;
 				uYrad = round(uY)*tRes;
@@ -576,6 +591,20 @@ public:
 		ros::shutdown();
 	}
 
+	void zoomlevelCb(const std_msgs::Int16::ConstPtr& zoomlevel){
+		ROS_INFO("zoomlevelCb, zoomleveldata: %d", zoomlevel->data);
+		auto searchX = mapAngleOfViewX.find(zoomlevel->data);
+		if( searchX != mapAngleOfViewX.end()){
+			alphaX = searchX->second;
+		}
+		auto searchY = mapAngleOfViewY.find(zoomlevel->data);
+		if( searchY != mapAngleOfViewY.end()){
+			alphaY = searchY->second;
+		ROS_INFO("new alphaX/alphaY:	%f	%f",alphaX,alphaY);
+		}
+
+	}
+
 	void setframeprops(int width, int height){
 		frWidth = width;
 		frHeight = height;
@@ -586,7 +615,39 @@ public:
 };
 
 int main(int argc, char **argv){
+	std::string angleOfViewFile;
+	if(argc == 2){
+		angleOfViewFile = argv[1];
+	}
+	else{
+		std::cout<< "Default angle of view mapping lab scale used.\n You can pass the arguments: [angleOfViewFar.txt] or [angleOfViewLabScale.txt]\n";
+		angleOfViewFile = "angleOfViewLabScale.txt";
+	}	
+// read in angle of view
+	std::vector<int> zoomlevelVec;
+	std::vector<double> angleOfViewXVec, angleOfViewYVec;
+	int tempz;
+	double tempx, tempy;
+	std::ifstream inputfile(angleOfViewFile);
+	if (inputfile.is_open())
+	{
+	while (inputfile >> tempz)
+	{
+//		inputfile >> tempz;
+		inputfile >> tempx;
+		inputfile >> tempy;
+		zoomlevelVec.push_back(tempz);
+		angleOfViewXVec.push_back(tempx);
+		angleOfViewYVec.push_back(tempy);
+	}
+	inputfile.close();
+	}
+	else{
+		std::cout << "Unable to open file";
+		return -1;
+	}
 
+/*
 	// generate specific input signal
 	double a = 0.25;
 	for (int i = 0; i<10; i++){
@@ -605,7 +666,7 @@ int main(int argc, char **argv){
 //	uspec[38] = 0;
 	uspec[300] = uspec[299]-0.01;
 //	uspec[281] = 0.0;
-
+*/
 
 /*
 	std::string line;
@@ -643,20 +704,8 @@ int main(int argc, char **argv){
 */
 
 	ros::init(argc,argv,"LQR_node");
-	LQR cm;
 
-	if(argc == 3){
-		int frWidth = atoi(argv[1]);
-		int frHeight = atoi(argv[2]);
-		cm.setframeprops(frWidth,frHeight);
-	std::cout << "\nframe width 	" << frWidth
-	<< "\nframe height	" << frHeight << "\n"; 
-	}
-	else{
-		std::cout<< "Default frame property values used [640x360].\n You can pass the arguments using: [frame width]  [frame height] in command line\n";
-	}
-
-
+	LQR cm(zoomlevelVec,angleOfViewXVec,angleOfViewYVec);
 
 	ros::spin();
 	return 0;

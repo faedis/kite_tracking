@@ -15,6 +15,8 @@ window without target rectangle is used to interrupt with the waitkey
 #include <opencv2/imgproc/imgproc.hpp>
 #include <sys/time.h>
 #include <string>
+#define _USE_MATH_DEFINES
+#include <math.h>
 
 std::string winNameraw = "Preview Frame";
 std::string winNamedet = "Preview Detection";
@@ -33,11 +35,15 @@ class ImageShow{
 private:
 cv::Mat frame;
 double tside, tsize;
+double theta = 0;
 int pixelX, pixelY;
 std_msgs::Int8 waitkey;
 std_msgs::Bool shutdownkey;
 int frWidth = 640;
 int frHeight = 360;
+cv::Scalar DispColor = cv::Scalar(0,0,0);
+cv::Scalar ArucoCol = cv::Scalar(0,0,255);
+cv::Scalar TrackCol = cv::Scalar(0,255,0);
 public:
 	ImageShow() : it_(nh_) {
 		image_sub_ = it_.subscribe("/camera/image_raw",1,
@@ -66,7 +72,7 @@ public:
 			ROS_ERROR("cv_bridge exception: %s", e.what());
 			return;
 		}
-		frame = cv_ptr->image;
+		cv_ptr->image.copyTo(frame);
 		if(!cv_ptr->image.empty()){
 			cv::imshow(winNameraw,cv_ptr->image);
 			waitkey.data = cv::waitKey(1);
@@ -89,13 +95,20 @@ public:
 	void comparedpixelposCb(const geometry_msgs::Pose2D::ConstPtr& comparedpixelpos){
 		pixelX = comparedpixelpos->x;
 		pixelY = comparedpixelpos->y;
+		theta = comparedpixelpos->theta;
 	}
 	void displayDetCb(const std_msgs::Float32MultiArray::ConstPtr& fandzmsg){
 		if(!frame.empty()){
+			if(theta<-7) DispColor = TrackCol;
+			else DispColor = ArucoCol;
+
 			tsize = fandzmsg->data[2];
 			if(pixelX>=0){
 			cv::rectangle(frame, cv::Rect(round(pixelX-tsize/2.0),round(pixelY-tsize/2.0), round(tsize), round(tsize))&cv::Rect(0,0,frWidth-1,frHeight-1),
-				cv::Scalar(0,0,255),2,8,0);
+				DispColor,2,8,0);
+			if(theta>-7){
+				cv::arrowedLine(frame, cv::Point(round(pixelX),round(pixelY)), cv::Point(pixelX + std::round(std::cos(theta)*10),pixelY - std::round(std::sin(theta)*10)), DispColor, 2);
+				}
 			}
 			cv::imshow(winNamedet,frame);
 			cv::waitKey(1);
