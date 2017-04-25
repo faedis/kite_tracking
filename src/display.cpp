@@ -124,7 +124,7 @@ int main(int argc, char **argv)
 {
 	ros::init(argc, argv, "display_node");
 	ImageShow is;
-	if(argc == 3){
+/*	if(argc == 3){
 		int frWidth = atoi(argv[1]);
 		int frHeight = atoi(argv[2]);
 		is.setframeprops(frWidth,frHeight);
@@ -134,6 +134,7 @@ int main(int argc, char **argv)
 	else{
 		std::cout<< "Default frame property values used [640x360].\n You can pass the arguments using: [frame width]  [frame height] in command line\n";
 	}
+*/
 	ros::spin();
 	return 0;
 }

@@ -616,13 +616,14 @@ public:
 
 int main(int argc, char **argv){
 	std::string angleOfViewFile;
-	if(argc == 2){
+/*	if(argc == 2){
 		angleOfViewFile = argv[1];
 	}
 	else{
 		std::cout<< "Default angle of view mapping lab scale used.\n You can pass the arguments: [angleOfViewFar.txt] or [angleOfViewLabScale.txt]\n";
-		angleOfViewFile = "angleOfViewLabScale.txt";
-	}	
+		angleOfViewFile = "/home/guetgf/catkin_ws/src/kite_tracking/src/angleOfViewLabScale.txt";
+	}*/
+	angleOfViewFile = "/home/guetgf/catkin_ws/src/kite_tracking/src/angleOfViewLabScale.txt";
 // read in angle of view
 	std::vector<int> zoomlevelVec;
 	std::vector<double> angleOfViewXVec, angleOfViewYVec;

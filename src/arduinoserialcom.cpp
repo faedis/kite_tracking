@@ -230,14 +230,14 @@ public:
 
 int main( int argc, char** argv ) {
 	string SERIAL_PATH = "/dev/ttyACM0";
-	if(argc = 2){
+/*	if(argc == 2){
 		SERIAL_PATH = argv[1];
 		cout << "serial path to arduino is "<< argv[1] << "\n";
 	}
 	else{
 		cout << "Default serial path to arduino: /dev/tty/ACM0 \n change this by giving the path as argument\n";
 	}
-
+*/
 	// Open serial port to arduino++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 	int serial_fd = open(SERIAL_PATH.c_str(),O_RDWR|O_NOCTTY|O_NDELAY);
 	//Setup Serial communication
@@ -270,7 +270,7 @@ int main( int argc, char** argv ) {
 	}
 	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-	ros::init(argc,argv,"arduinoserialcom_node");
+	ros::init(argc,argv,"Zarduinoserialcom_node");
 	ArduinoCom ac(serial_fd);
 	ros::spin();
 

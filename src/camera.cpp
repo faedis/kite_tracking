@@ -22,7 +22,7 @@ int main(int argc, char** argv)
 	int fps = 60;
 	int frHeight = 360; //576;
 	int frWidth = 640; //1024;
-
+/*
 	if(argc == 3){
 		frWidth = atoi(argv[1]);
 		frHeight = atoi(argv[2]);
@@ -32,7 +32,7 @@ int main(int argc, char** argv)
 	}	
 	std::cout << "\nframe width 	" << frWidth
 	<< "\nframe height	" << frHeight << "\n"; 
-
+*/
 	// Ros
 	ros::init(argc, argv, "camera_node");
 	ros::NodeHandle nh;
