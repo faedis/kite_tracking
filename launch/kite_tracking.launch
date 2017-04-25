@@ -1,0 +1,9 @@
+<launch>
+<node name="camera" pkg="kite_tracking" type="camera_node"/>
+<node name="display" pkg="kite_tracking" type="display_node"/>
+<node name="markerdetection" pkg="kite_tracking" type="markerdetection_node"/>
+<node name="KCFtracker" pkg="kite_tracking" type="kcftracker_node"/>
+<node name="LQR" pkg="kite_tracking" type="LQR_node" output="screen"/>
+<node name="arduinoserial" pkg="kite_tracking" type="arduinoserialcom_node"/>
+<node name="PTUserial" pkg="kite_tracking" type="ptuserialcom_node" output="screen"/>
+</launch>

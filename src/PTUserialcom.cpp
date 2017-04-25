@@ -203,7 +203,7 @@ int main( int argc, char** argv ) {
 		if (set_desired(PAN, BASE, (PTU_PARM_PTR *)&val, ABSOLUTE) != PTU_OK) {
 			cout << "Pan base speed could not be set \n";
 		}
-		val = val;
+		val = 58;
 		if (set_desired(TILT, BASE, (PTU_PARM_PTR *)&val, ABSOLUTE) != PTU_OK) {
 			cout << "Tilt base speed could not be set \n";
 		}

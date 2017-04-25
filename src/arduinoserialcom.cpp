@@ -9,6 +9,7 @@
 #include <std_msgs/Float32MultiArray.h>
 #include <std_msgs/Int16.h>
 #include <std_msgs/Bool.h>
+#include <std_msgs/Int8.h>
 //#include <geometry_msgs/Point.h>
 #include <opencv2/highgui/highgui.hpp>
 #include "opencv2/videoio.hpp"
@@ -29,177 +30,220 @@
 using namespace std;
 using namespace cv;
 
+
+
+
 #define BAUDRATE B9600
-#define SERIAL_PATH "/dev/ttyACM0"
-//Setup Serial communication
-struct termios serial_settings;
-// Try opening serial port
-// int serial_fd = open(SERIAL_PATH,O_WRONLY|O_NOCTTY);//serial_fd = open(SERIAL_PATH,O_RDWR|O_NOCTTY);
-int serial_fd;
 
+class ArduinoCom{
 
-#define NEAR 0
-#define FAR 1
-#define OFF 0
-#define ON 1
+	ros::NodeHandle nh_;
+	ros::Publisher zoom_level_pub_;
+	ros::Subscriber focus_and_zoom_sub_;
+	ros::Subscriber shutdownkey_sub_;
+private:
+	int serial_fd; 
+	// Focus variables
+	int focus;
+	int focmin = 650;
+	int focmax = 800;
+	int focusstep = 3;
+	int focusscanstep = 10;
+	int delay = 6;
+	int smalldelay = 6;
+	int largedelay = 2*smalldelay;
+	bool
+	NEAR = false,
+	FAR = true,
+	OFF = false,
+	ON = true,
+	detectflag = false, 
+	knowcenterflag = false,
+	oldknowcenterflag = false,
+	olddetectflag = false,
+	scanfocus = true,
+	direction = FAR,
+	firstscan = true;
+	int scanfocmax;
+	int focuscounter = 0;
+	int notdetectcounter = 0;
+	double sharpness, sharpnessold = 0, fsharpness, fsharpnessold;
+	// Zoom variables
+	int zoomcounter = 0, zoomdelay = 6;
+	int  zoom = 171, zoommax = 171, zoommin = 0, zoomstep = 3, oldzoom = zoom;
+	float tsize, tsizefiltered; // target size
+	float tsizeUpperThrshld = 30, tsizeLowerThrshld = 25;
+	int loopcounter = 0;
+	std_msgs::Int16 zoomlevel;
 
-// Focus variables
-int focus;
-int focmin = 650;
-int focmax = 800;
-int focrange = 100;
-int focrangecenter;
-int focusstep = 3;
-int focusscanstep = 10;
-int delay;
-int smalldelay = 6;
-int largedelay = 2*delay;
-bool detectflag = false, knowcenterflag = false, oldknowcenterflag = false, olddetectflag = false, scanfocus = true, direction = FAR,firstscan = true;
-int scanfocmax;
-int focuscounter = 0;
-int notdetectcounter = 0;
-double sharpness, sharpnessold = 0, fsharpness, fsharpnessold;
-// Zoom variables
-int zoomcounter = 0, zoomdelay = 6;
-int  zoom = 170, zoommax = 170, zoommin = 0, zoomstep = 3;
-float tsize, tsizefiltered; // target size
-float tsizeUpperThrshld = 30, tsizeLowerThrshld = 25;
-int loopcounter = 0;
-
-void sendFocus(){
-	ostringstream cmd_buff;
-	cmd_buff << ">f,"<<focus<<"<";
-	string cmd = cmd_buff.str();
-	write(serial_fd,cmd.c_str(),cmd.length());
-//	ROS_INFO("Sent focus: [%i], Sharpness [%f]", focus,sharpness);
-	//cout<<"Sent focus command: "<<cmd<<endl;
-}
-void sendZoom(){
-	ostringstream cmd_buff;
-	cmd_buff << ">z,"<<zoom<<"<";
-	string cmd = cmd_buff.str();
-	write(serial_fd,cmd.c_str(),cmd.length());
-	//ROS_INFO("Sent zoom: [%i]", zoom);
-	//cout<<"Sent focus command: "<<cmd<<endl;
-}
-
-void scanFocus(){
-	if(firstscan){
-		loopcounter = 0;
-		delay = largedelay;
-		focus = focmin;
-		sendFocus();
-		firstscan = false;
+public:
+	// constructor
+	ArduinoCom(int SERIAL_FD){
+		serial_fd = SERIAL_FD;
+		
+		zoom_level_pub_ = nh_.advertise<std_msgs::Int16>("zoomlevel",1);
+		focus_and_zoom_sub_ = nh_.subscribe("fandzmsg",1,&ArduinoCom::d_f_z_Callback,this);
+		shutdownkey_sub_ = nh_.subscribe("shutdownkey",1,&ArduinoCom::shutdownCb,this);
 	}
-	else if(loopcounter>delay){
-		delay = smalldelay;
-		loopcounter = 0;
-		if(sharpness>sharpnessold){
-			scanfocmax = focus;
-		}
-		focus += focusscanstep;
-		if(focus>focmax){
-			scanfocus = false;
-			firstscan = true;
-			focus = scanfocmax;
+	~ArduinoCom(){
+	}
+
+	void sendFocus(){
+//		ROS_INFO("focus sent: %d", focus);
+		ostringstream cmd_buff;
+		cmd_buff << ">f,"<<focus<<"<";
+		string cmd = cmd_buff.str();
+		write(serial_fd,cmd.c_str(),cmd.length());
+	//	ROS_INFO("Sent focus: [%i], Sharpness [%f]", focus,sharpness);
+		//cout<<"Sent focus command: "<<cmd<<endl;
+	}
+	void sendZoom(){
+//		ROS_INFO("Zoom sent:	%d",zoom);
+		ostringstream cmd_buff;
+		cmd_buff << ">z,"<<zoom<<"<";
+		string cmd = cmd_buff.str();
+		write(serial_fd,cmd.c_str(),cmd.length());
+		//ROS_INFO("Sent zoom: [%i]", zoom);
+		//cout<<"Sent focus command: "<<cmd<<endl;
+	}
+
+	void scanFocus(){
+		if(firstscan){
+//	ROS_INFO("FIRSTSCAN");
 			loopcounter = 0;
+			delay = largedelay;
+			focus = focmin;
+			sendFocus();
+			firstscan = false;
 		}
-		if(detectflag){
-			scanfocus = false;
-			firstscan = true;
-			direction = FAR;
+		else if(loopcounter>delay){
+			delay = smalldelay;
 			loopcounter = 0;
-//			focus -= focusscanstep;
+			if(sharpness>sharpnessold){
+				scanfocmax = focus;
+			}
+			focus += focusscanstep;
+			if(focus>focmax){
+				scanfocus = false;
+				firstscan = true;
+				focus = scanfocmax;
+				loopcounter = 0;
+			}
+			if(detectflag){
+				scanfocus = false;
+				firstscan = true;
+				direction = FAR;
+				loopcounter = 0;
+	//			focus -= focusscanstep;
+			}
+//	ROS_INFO("scan");
+			sendFocus();
 		}
-		sendFocus();
+
 	}
 
-}
-
-void controlFocus(){
-	fsharpness += sharpness;
-	if(loopcounter>smalldelay){
-		fsharpness /= (smalldelay+2);
-		loopcounter = 0;
-		if(fsharpness<fsharpnessold){
-			direction ^= true;
-		}
-		if(direction == NEAR) focus -= focusstep;
-		else focus += focusstep;
-		focus = min(focmax, focus);
-		focus = max(focmin, focus);
-		cout << "focus control value		" << focus << "\n";
-		fsharpnessold = fsharpness;
-		fsharpness = 0;
-		sendFocus();
-	}
-}
-
-void controlZoom(){
-	if(!detectflag){
-		if(notdetectcounter > 9){
-			zoom = zoommax;
-			sendZoom();
+	void controlFocus(){
+		fsharpness += sharpness;
+		if(loopcounter>smalldelay){
+			fsharpness /= (smalldelay+2);
+			loopcounter = 0;
+			if(fsharpness<fsharpnessold){
+				direction ^= true;
+			}
+			if(direction == NEAR) focus -= focusstep;
+			else focus += focusstep;
+			focus = min(focmax, focus);
+			focus = max(focmin, focus);
+			fsharpnessold = fsharpness;
+			fsharpness = 0;
+			sendFocus();
 		}
 	}
-	else if (loopcounter==4){
-		if(tsizefiltered>tsizeUpperThrshld){
-			zoom += zoomstep;
-			zoom = max(zoom, zoommin);
-			sendZoom();
+
+	void controlZoom(){
+		oldzoom = zoom;
+		if(!detectflag){
+			if(notdetectcounter > 9){
+				zoom = zoommax;
+				sendZoom();
+			}
 		}
-		else if(tsizefiltered<tsizeLowerThrshld){
-			zoom -= zoomstep;
-			zoom = min(zoom,zoommax);
-			sendZoom();
+		else if (loopcounter==4){
+			if(tsizefiltered>tsizeUpperThrshld){
+				zoom += zoomstep;
+				zoom = min(zoom, zoommax);
+				sendZoom();
+			}
+			else if(tsizefiltered<tsizeLowerThrshld){
+				zoom -= zoomstep;
+				zoom = max(zoom,zoommin);
+				sendZoom();
+			}
+			zoomcounter = 0;
 		}
-		zoomcounter = 0;
-		ROS_INFO("Zoom:	%d",zoom);
+		if(zoom != oldzoom){
+			zoomlevel.data = zoom;
+			zoom_level_pub_.publish(zoomlevel);
+		}
 	}
-}
 
-void d_f_z_Callback(const std_msgs::Float32MultiArray::ConstPtr& fandzmsg){
-	loopcounter++;
-	// update knowcenterflag
-	oldknowcenterflag = knowcenterflag;
-	knowcenterflag = fandzmsg->data[3];
-	// update detect flag
-	olddetectflag = detectflag;
-	detectflag = fandzmsg->data[0];
-	//update sharpness
-	if(!oldknowcenterflag && knowcenterflag) sharpnessold = 0;
-	else sharpnessold = sharpness;
-	sharpness = fandzmsg->data[1];
-	// update zoom
-	tsizefiltered = 0.8*tsizefiltered;
-	tsize = fandzmsg->data[2];
-	tsizefiltered += 0.2*tsize;
-	// control them
-//	ROS_INFO("detectflag %d",detectflag);
-	if(detectflag == 0){
-		notdetectcounter++;
-	}
-	else notdetectcounter = 0;
-	if(notdetectcounter>10){
-		scanfocus = true;
-		notdetectcounter = 0;
-	}
-	if(scanfocus){
-		scanFocus();
-	}
-	else controlFocus();
+	void d_f_z_Callback(const std_msgs::Float32MultiArray::ConstPtr& fandzmsg){
+		loopcounter++;
+		// update knowcenterflag
+		oldknowcenterflag = knowcenterflag;
+		knowcenterflag = fandzmsg->data[3];
+		// update detect flag
+		olddetectflag = detectflag;
+		detectflag = fandzmsg->data[0];
+		//update sharpness
+		if(!oldknowcenterflag && knowcenterflag) sharpnessold = 0;
+		else sharpnessold = sharpness;
+		sharpness = fandzmsg->data[1];
+		// update zoom
+		tsizefiltered = 0.8*tsizefiltered;
+		tsize = fandzmsg->data[2];
+		tsizefiltered += 0.2*tsize;
+//		ROS_INFO("tsize, tsizef: %f	%f",tsize,tsizefiltered);
+		// control them
+	//	ROS_INFO("detectflag %d",detectflag);
+		if(detectflag == 0){
+			notdetectcounter++;
+		}
+		else notdetectcounter = 0;
+		if(notdetectcounter>10){
+			scanfocus = true;
+			notdetectcounter = 0;
+		}
+		if(scanfocus){
+			scanFocus();
+		}
+		else controlFocus();
 
-	controlZoom();
-}
+		controlZoom();
+	}
 
-void shutdownCb(const std_msgs::Bool::ConstPtr& shutdownkey){
-	ROS_INFO("Shutdown\n");
-	ros::shutdown();
-}
+	void shutdownCb(const std_msgs::Bool::ConstPtr& shutdownkey){
+		ROS_INFO("Shutdown\n");
+		ros::shutdown();
+	}
+};
 
 int main( int argc, char** argv ) {
+	string SERIAL_PATH = "/dev/ttyACM0";
+/*	if(argc == 2){
+		SERIAL_PATH = argv[1];
+		cout << "serial path to arduino is "<< argv[1] << "\n";
+	}
+	else{
+		cout << "Default serial path to arduino: /dev/tty/ACM0 \n change this by giving the path as argument\n";
+	}
+*/
 	// Open serial port to arduino++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-	serial_fd = open(SERIAL_PATH,O_RDWR|O_NOCTTY|O_NDELAY);
+	int serial_fd = open(SERIAL_PATH.c_str(),O_RDWR|O_NOCTTY|O_NDELAY);
+	//Setup Serial communication
+	struct termios serial_settings;
+	// Try opening serial port
+	// int serial_fd = open(SERIAL_PATH,O_WRONLY|O_NOCTTY);//serial_fd = open(SERIAL_PATH,O_RDWR|O_NOCTTY);
 	if(serial_fd == -1){
 		printf("Serial Port connection Failed.\n");
 		return -1;
@@ -226,12 +270,8 @@ int main( int argc, char** argv ) {
 	}
 	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-	ros::init(argc,argv,"arduinoserialcom_node");
-
-	ros::NodeHandle n_;
-	
-	ros::Subscriber focus_and_zoom_sub_ = n_.subscribe("fandzmsg",1,d_f_z_Callback);
-	ros::Subscriber shutdownkey_sub_ = n_.subscribe("shutdownkey",1,shutdownCb);
+	ros::init(argc,argv,"Zarduinoserialcom_node");
+	ArduinoCom ac(serial_fd);
 	ros::spin();
 
 	return(0);

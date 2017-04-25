@@ -95,13 +95,13 @@ public:
 		focus_and_zoom_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("fandzmsg",1);
 		fandzmsg.data.resize(4); // [0] = detected 0 or 1, [1] = sharpness, [2] = target size, [3] = center detected
 
-		cv::namedWindow(winName,cv::WINDOW_KEEPRATIO);
+//		cv::namedWindow(winName,cv::WINDOW_KEEPRATIO);
 
 		dictionary = cv::aruco::generateCustomDictionary(dictNumber,markerSize);
 	}
 
 	~ArucoDet(){
-		cv::destroyWindow(winName);
+//		cv::destroyWindow(winName);
 	}
 	void shutdownCb(const std_msgs::Bool::ConstPtr& shutdownkey){
 		ROS_INFO("Shutdown\n");
@@ -177,6 +177,7 @@ public:
 			else{
 				pixelpos.x = -1;
 				pixelpos.y = -1;
+				pixelpos.theta = -10;
 				knowcenterflag = false;
 				detectflag = false;
 			}
@@ -186,7 +187,7 @@ public:
 			detectflag = false;
 			pixelpos.x = -1;
 			pixelpos.y = -1;
-			pixelpos.theta = 0;
+			pixelpos.theta = -10;
 		}
 
 		// Delay of 16ms!!!! artificial
@@ -196,7 +197,7 @@ public:
 		elapsedTime = (t2.tv_sec - t1.tv_sec)*1000;      // sec to ms
 		elapsedTime += (t2.tv_usec - t1.tv_usec)/1000;
 //		ROS_INFO("time aruco	%f",elapsedTime);
-		while(elapsedTime<14.5){
+		while(elapsedTime<12.5){
 			gettimeofday(&t2, NULL);
 			elapsedTime = (t2.tv_sec - t1.tv_sec)*1000;      // sec to ms
 			elapsedTime += (t2.tv_usec - t1.tv_usec)/1000;   // us to ms
@@ -218,10 +219,12 @@ public:
 			fandzmsg.data[2] = sqrt((area1+area2)/2.0);
 //			ROS_INFO("area1	%f", area1);
 		}
+/*
 // Draw markers on frame and display
 		cv::aruco::drawDetectedMarkers(grayFrame,markerCorners,markerIds);
 		cv::imshow(winName,grayFrame);
 		cv::waitKey(1);
+*/
 // clean the vectors containing informationa about the detected markers
 		markerCorners.clear();
 		markerIds.clear();
