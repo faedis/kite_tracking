@@ -54,6 +54,19 @@ public:
 		waitkey_pub_ = nh_.advertise<std_msgs::Int8>("waitkey",1);
 		shutdownkey_pub_ = nh_.advertise<std_msgs::Bool>("shutdownkey",1);
 
+
+		if(nh_.hasParam("camera/frWidth")){
+			bool success = nh_.getParam("camera/frWidth",frWidth);
+			ROS_INFO("Read display parameter frWidth, success: %d	%d",frWidth, success);
+		}
+		else ROS_INFO("display param not found");
+		if(nh_.hasParam("camera/frHeight")){
+			bool success = nh_.getParam("camera/frHeight",frHeight);
+			ROS_INFO("Read parameter frHeight, success: %d	%d",frHeight, success);
+		}
+		else ROS_INFO("param height not found");
+
+
 		cv::namedWindow(winNameraw,cv::WINDOW_KEEPRATIO);
 		cv::namedWindow(winNamedet,cv::WINDOW_KEEPRATIO);
 	}

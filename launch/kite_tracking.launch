@@ -1,9 +1,45 @@
 <launch>
-<node name="camera" pkg="kite_tracking" type="camera_node"/>
-<node name="display" pkg="kite_tracking" type="display_node"/>
-<node name="markerdetection" pkg="kite_tracking" type="markerdetection_node"/>
-<node name="KCFtracker" pkg="kite_tracking" type="kcftracker_node"/>
-<node name="LQR" pkg="kite_tracking" type="LQR_node" output="screen"/>
-<node name="arduinoserial" pkg="kite_tracking" type="arduinoserialcom_node"/>
-<node name="PTUserial" pkg="kite_tracking" type="ptuserialcom_node" output="screen"/>
+	<node name="camera" pkg="kite_tracking" type="camera_node" output="screen">
+		<param name="frWidth" value="640" type="int"/>
+		<param name="frHeight" value="360" type="int"/>
+		<param name="fps" value="60" type="int"/>
+		<param name="cameraNumber" value="0" type="int"/>
+	</node>
+
+	<node name="display" pkg="kite_tracking" type="display_node" output="screen"/>
+
+	<node name="markerdetection" pkg="kite_tracking" type="markerdetection_node" output="screen">
+		<param name="dictNumber" value="10" type="int"/>
+		<param name="markerSize" value="5" type="int"/>		
+	</node>
+
+	<node name="KCFtracker" pkg="kite_tracking" type="kcftracker_node" output="screen">
+		<param name="roiSize" value="60" type="int"/>
+		<param name="distanceLimit" value="30" type="int"/>
+	</node>
+
+	<node name="lqr" pkg="kite_tracking" type="LQR_node" output="screen">
+		<param name="pRes" value="0.0004487988119946330" type="double"/>
+		<param name="tRes" value="0.0002243994059973165" type="double"/>
+		<param name="tolerance" value="6" type="int"/>
+		<param name="K1" value="3.1448" type="double"/>
+		<param name="K2" value="0.6103" type="double"/>
+		<param name="Mx1" value="0.8181" type="double"/>
+		<param name="Mx2" value="16.9903" type="double"/>
+		<param name="My1" value="0.6867" type="double"/>
+		<param name="My2" value="10.7716" type="double"/>
+		<param name="mapFilePath" value="$(find kite_tracking)/src/angleOfViewLabScale.txt" type="str"/>
+	</node>
+
+	<node name="arduinoserial" pkg="kite_tracking" type="arduinoserialcom_node" output="screen">
+		<param name="focmin" value="650" type="int"/>	
+		<param name="focmax" value="800" type="int"/>		
+		<param name="focusstep" value="3" type="int"/>
+		<param name="focusscanstep" value="10" type="int"/>	
+		<param name="tsizeUpperThrshld" value="30" type="int"/>				
+		<param name="tsizeLowerThrshld" value="25" type="int"/>
+		<param name="serial_path" value="/dev/ttyACM0" type="str"/>
+	</node>
+
+	<node name="PTUserial" pkg="kite_tracking" type="ptuserialcom_node" output="screen"/>
 </launch>

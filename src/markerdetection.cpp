@@ -61,6 +61,8 @@ private:
 int key = 0;
 cv::Mat grayFrame;
 cv::Point target;
+int frWidth = 640;
+int frHeight = 360;
 // Messages
 geometry_msgs::Pose2D pixelpos;
 //std_msgs::Bool detectmsg;
@@ -95,9 +97,30 @@ public:
 		focus_and_zoom_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("fandzmsg",1);
 		fandzmsg.data.resize(4); // [0] = detected 0 or 1, [1] = sharpness, [2] = target size, [3] = center detected
 
-//		cv::namedWindow(winName,cv::WINDOW_KEEPRATIO);
+		// Read in parameters:
+		if(nh_.hasParam("camera/frWidth")){
+			bool success = nh_.getParam("camera/frWidth",frWidth);
+			ROS_INFO("Read display parameter frWidth, success: %d	%d",frWidth, success);
+		}
+		else ROS_INFO("display param not found");
+		if(nh_.hasParam("camera/frHeight")){
+			bool success = nh_.getParam("camera/frHeight",frHeight);
+			ROS_INFO("Read parameter frHeight, success: %d	%d",frHeight, success);
+		}
+		else ROS_INFO("param height not found");
+		if(nh_.hasParam("markerdetection/dictNumber")){
+			bool success = nh_.getParam("markerdetection/dictNumber",dictNumber);
+			ROS_INFO("Read parameter dictNumber, success: %d	%d",dictNumber, success);
+		}
+		else ROS_INFO("param dictNumber not found");
+		if(nh_.hasParam("markerdetection/markerSize")){
+			bool success = nh_.getParam("markerdetection/markerSize",markerSize);
+			ROS_INFO("Read parameter markerSize, success: %d	%d",markerSize, success);
+		}
+		else ROS_INFO("param dictNumber not found");
 
 		dictionary = cv::aruco::generateCustomDictionary(dictNumber,markerSize);
+
 	}
 
 	~ArucoDet(){
@@ -234,7 +257,7 @@ public:
 // these messages are all in focus_and_zoom
 
 		if(knowcenterflag && (fandzmsg.data[2]>3)){
-		focusmeasure = LaplaceVarFocus(grayFrame(cv::Rect(round(pixelpos.x-4*fandzmsg.data[2]/2.0),round(pixelpos.y-4*fandzmsg.data[2]/2.0), round(4*fandzmsg.data[2]), round(4*fandzmsg.data[2]))&cv::Rect(0,0,639,359)));
+		focusmeasure = LaplaceVarFocus(grayFrame(cv::Rect(round(pixelpos.x-4*fandzmsg.data[2]/2.0),round(pixelpos.y-4*fandzmsg.data[2]/2.0), round(4*fandzmsg.data[2]), round(4*fandzmsg.data[2]))&cv::Rect(0,0,frWidth-1,frHeight-1)));
 		}
 		else focusmeasure = LaplaceVarFocus(grayFrame);
 

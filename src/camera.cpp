@@ -22,6 +22,7 @@ int main(int argc, char** argv)
 	int fps = 60;
 	int frHeight = 360; //576;
 	int frWidth = 640; //1024;
+	int cameraNumber = 0;
 /*
 	if(argc == 3){
 		frWidth = atoi(argv[1]);
@@ -47,10 +48,31 @@ int main(int argc, char** argv)
 	//std_msgs::Int8 waitkey;
 	//geometry_msgs::Pose2D pixelpos;
 
+	if(nh.hasParam("camera/frWidth")){
+		bool success = nh.getParam("camera/frWidth",frWidth);
+		ROS_INFO("Read parameter frWidth, success: %d	%d",frWidth, success);
+	}
+	else ROS_INFO("param width not found");
+	if(nh.hasParam("camera/frHeight")){
+		bool success = nh.getParam("camera/frHeight",frHeight);
+		ROS_INFO("Read parameter frHeight, success: %d	%d",frHeight, success);
+	}
+	else ROS_INFO("param height not found");
+	if(nh.hasParam("camera/fps")){
+		bool success = nh.getParam("camera/fps",fps);
+		ROS_INFO("Read parameter fps, success: %d	%d",fps, success);
+	}
+	else ROS_INFO("param fps not found");
+	if(nh.hasParam("camera/cameraNumber")){
+		bool success = nh.getParam("camera/cameraNumber",cameraNumber);
+		ROS_INFO("Read parameter cameraNumber, success: %d	%d",cameraNumber, success);
+	}
+	else ROS_INFO("param cameraNumber not found");
+	
 	// OpenCV
 	cv::Mat frame;
   	cv::VideoCapture cap;
-	cap.open(0);
+	cap.open(cameraNumber);
 	if(!cap.isOpened()){
 		std::cout << "Cannot open camera!!!\n";
 		return -1;
