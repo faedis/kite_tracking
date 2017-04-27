@@ -36,7 +36,7 @@ private:
 cv::Mat frame;
 double tside, tsize;
 double theta = 0;
-int pixelX, pixelY;
+double pixelX, pixelY;
 std_msgs::Int8 waitkey;
 std_msgs::Bool shutdownkey;
 int frWidth = 640;
@@ -117,10 +117,10 @@ public:
 
 			tsize = fandzmsg->data[2];
 			if(pixelX>=0){
-			cv::rectangle(frame, cv::Rect(round(pixelX-tsize/2.0),round(pixelY-tsize/2.0), round(tsize), round(tsize))&cv::Rect(0,0,frWidth-1,frHeight-1),
+			cv::rectangle(frame, cv::Rect2d(pixelX-tsize/2.0,pixelY-tsize/2.0, tsize, tsize)&cv::Rect2d(0,0,frWidth-1,frHeight-1),
 				DispColor,2,8,0);
 			if(theta>-7){
-				cv::arrowedLine(frame, cv::Point(round(pixelX),round(pixelY)), cv::Point(pixelX + std::round(std::cos(theta)*10),pixelY - std::round(std::sin(theta)*10)), DispColor, 2);
+				cv::arrowedLine(frame, cv::Point2f(pixelX,pixelY), cv::Point2f(pixelX + std::cos(theta)*10,pixelY - std::sin(theta)*10), DispColor, 2);
 				}
 			}
 			cv::imshow(winNamedet,frame);
