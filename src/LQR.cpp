@@ -122,17 +122,18 @@ bool firstloop = true, secondloop = true, thirdloop = true;
 bool PTUctrl = false;
 double alphaX = 0.079555; // correction  by measurements 1.055
 double alphaY = 0.044814; // correction  by measurements 1.021
+std::string mapFilePath = "/home/guetgf/catkin_ws/src/kite_tracking/src/angleOfViewLabScale.txt";
 double pRes = 92.5714 / 3600.0 * M_PI / 180.0;
 double tRes = 46.2857 / 3600.0 * M_PI / 180.0;
-double frWidth = 640;
-double frHeight = 360;
-double hWidth = frWidth/2;
-double hHeight = frHeight/2;
+int frWidth = 640;
+int frHeight = 360;
+int hWidth = frWidth/2;
+int hHeight = frHeight/2;
 int uXmax= 5000, uXmin = 60;		// pan input limits pos/second
 int uYmax =5000, uYmin = 60;		// tilt input limits pos/second
 int deltaUXmax  = 200; //= 400;				// pan input rate limit pos/Ts
 int deltaUYmax = 400;				// tilt input rate limit pos/Ts
-double tolerance = 6;				// pixel		(other approach:0.00244; // rad)
+int tolerance = 6;				// pixel		(other approach:0.00244; // rad)
 
 std::vector<double> timeVec;
 std::vector<double> exVec;
@@ -207,7 +208,7 @@ My2 = 10.7716;//10.7716,
 
 
 public:
-	LQR(std::vector<int>& zoomLevelVec, std::vector<double>& angleOfViewXVec, std::vector<double>& angleOfViewYVec){
+	LQR(){
 //		pixelpos_sub_ = nh_.subscribe("pixelpos",1,&LQR::pixelposCb,this);
 		comparedpixelpos_sub_ = nh_.subscribe("comparedpixelpos",1,&LQR::comparedpixelposCb,this);
 		waitkey_sub_  = nh_.subscribe("waitkey",1,&LQR::waitkeyCb,this);
@@ -216,6 +217,91 @@ public:
 		zoomlevel_sub_ = nh_.subscribe("zoomlevel",1,&LQR::zoomlevelCb,this);
 		ptucmd_pub_ = nh_.advertise<geometry_msgs::Pose2D>("ptucmd",1);
 		targetpos_pub_ = nh_.advertise<geometry_msgs::Pose2D>("targetpos",1);
+		// read parameters:
+		if(nh_.hasParam("camera/frWidth")){
+			bool success = nh_.getParam("camera/frWidth",frWidth);
+			ROS_INFO("Read LQR parameter frWidth, success: %d	%d",frWidth, success);
+		}
+		else ROS_INFO("LQR param not found");
+		if(nh_.hasParam("camera/frHeight")){
+			bool success = nh_.getParam("camera/frHeight",frHeight);
+			ROS_INFO("Read LQR parameter frHeight, success: %d	%d",frHeight, success);
+		}
+		else ROS_INFO("LQR param height not found");
+		if(nh_.hasParam("lqr/pRes")){
+			bool success = nh_.getParam("lqr/pRes",pRes);
+			ROS_INFO("Read LQR parameter pRes, success: %f	%d",pRes, success);
+		}
+		else ROS_INFO("LQR param pRes not found");
+		if(nh_.hasParam("lqr/tRes")){
+			bool success = nh_.getParam("lqr/tRes",tRes);
+			ROS_INFO("LQR Read parameter tRes, success: %f	%d",tRes, success);
+		}
+		else ROS_INFO("LQR param tRes not found");
+		if(nh_.hasParam("lqr/tolerance")){
+			bool success = nh_.getParam("lqr/tolerance",tolerance);
+			ROS_INFO("Read LQR parameter tolerance, success: %d	%d",tolerance, success);
+		}
+		else ROS_INFO("LQR param tolerance not found");
+		if(nh_.hasParam("lqr/K1")){
+			bool success = nh_.getParam("lqr/K1",K1);
+			ROS_INFO("Read LQR parameter K1, success: %f	%d",K1, success);
+		}
+		else ROS_INFO("LQR param K1 not found");
+		if(nh_.hasParam("lqr/K2")){
+			bool success = nh_.getParam("lqr/K2",K2);
+			ROS_INFO("Read LQR parameter K2, success: %f	%d",K2, success);
+		}
+		else ROS_INFO("LQR param K2 not found");
+		if(nh_.hasParam("lqr/Mx1")){
+			bool success = nh_.getParam("lqr/Mx1",Mx1);
+			ROS_INFO("Read LQRparameter Mx1, success: %f	%d",Mx1, success);
+		}
+		else ROS_INFO("LQR param Mx1 not found");
+		if(nh_.hasParam("lqr/Mx2")){
+			bool success = nh_.getParam("lqr/Mx2",Mx2);
+			ROS_INFO("Read LQR parameter Mx2, success: %f	%d",Mx2, success);
+		}
+		else ROS_INFO("LQR param Mx2 not found");
+		if(nh_.hasParam("lqr/My1")){
+			bool success = nh_.getParam("lqr/My1",My1);
+			ROS_INFO("Read LQR parameter My1, success: %f	%d",My1, success);
+		}
+		else ROS_INFO("LQR param My1 not found");
+		if(nh_.hasParam("lqr/My2")){
+			bool success = nh_.getParam("lqr/My2",My2);
+			ROS_INFO("Read LQR parameter My2, success: %f	%d",My2, success);
+		}
+		else ROS_INFO("LQR param My2 not found");
+		if(nh_.hasParam("lqr/mapFilePath")){
+			bool success = nh_.getParam("lqr/mapFilePath",mapFilePath);
+			ROS_INFO("Read LQR parameter mapFile, success: %s	%d",mapFilePath.c_str(), success);
+		}
+		else ROS_INFO("LQR param mapFilePath not found");
+		// read in angle of view map text file
+		std::vector<int> zoomLevelVec;
+		std::vector<double> angleOfViewXVec, angleOfViewYVec;
+		int tempz;
+		double tempx, tempy;
+		std::ifstream inputfile(mapFilePath);
+		if (inputfile.is_open())
+		{
+		while (inputfile >> tempz)
+		{
+			inputfile >> tempx;
+			inputfile >> tempy;
+			zoomLevelVec.push_back(tempz);
+			angleOfViewXVec.push_back(tempx);
+			angleOfViewYVec.push_back(tempy);
+		}
+		inputfile.close();
+		}
+		else{
+			ROS_INFO("Unable to open file\n shutdown");
+			ros::shutdown();
+		}
+
+
 		kx.kalmanInit(Ts, Mx1, Mx2);
 		ky.kalmanInit(Ts, My1, My2);
 		krx.kalmanInit(Ts, Mx1, Mx2);
@@ -226,6 +312,9 @@ public:
 			mapAngleOfViewX.insert(std::make_pair(zoomLevelVec[i], angleOfViewXVec[i]));
 			mapAngleOfViewY.insert(std::make_pair(zoomLevelVec[i], angleOfViewYVec[i]));
 		}
+		zoomLevelVec.clear();
+		angleOfViewXVec.clear();
+		angleOfViewYVec.clear();
 	}
 	~LQR(){
 	}
@@ -237,14 +326,14 @@ public:
 			tsize = comparedpixelpos->theta;
 			if(pixelX>=0){
 			// assign errors
-			eX = -alphaX * (double)(pixelX - hWidth) / (double)hWidth;
-			eY = -alphaY * (double)(pixelY - hHeight) / (double)hHeight;
+			eX = -alphaX * (pixelX - (double)hWidth) / (double)hWidth;
+			eY = -alphaY * (pixelY - (double)hHeight) / (double)hHeight;
 			}
 			else{
 				eX = 0.8*eX;
 				eY = 0.8*eY;
-			pixelX = hWidth;
-			pixelY = hHeight;
+			pixelX = (double)hWidth;
+			pixelY = (double)hHeight;
 			}
 
 
@@ -341,23 +430,23 @@ public:
 		
 
 				// input rate limit:
-				if(abs(uX-ouX)>deltaUXmax){
+				if(fabs(uX-ouX)>deltaUXmax){
 					if(uX>ouX) uX = ouX + deltaUXmax;
 					else uX = ouX - deltaUXmax;
 					// correct small velocities (otherwise speed would be increased again
-					if(abs(uX)<uXmin){
-						if(abs(pixelX-hWidth)>tolerance){//
+					if(fabs(uX)<uXmin){
+						if(abs(pixelX-hWidth)>(double)tolerance){//
 							uX = copysign(uXmin,ouX);
 						}
 						else uX = 0;
 					}					
 				}
-				if(abs(uY-ouY)>deltaUYmax){
+				if(fabs(uY-ouY)>deltaUYmax){
 					if(uY>ouY) uY = ouY + deltaUYmax;
 					else uY = ouY - deltaUYmax;
 					// correct small velocities (otherwise speed would be increased again
-					if(abs(uY)<uYmin){
-						if(abs(pixelY-hHeight)>tolerance){//
+					if(fabs(uY)<uYmin){
+						if(abs(pixelY-hHeight)>(double)tolerance){//
 							uY = copysign(uYmin,ouY);
 						}
 					else uY = 0;
@@ -372,22 +461,22 @@ public:
 				}
 */
 				// input limits:
-				if(abs(uX)<uXmin){
-					if(abs(pixelX-hWidth)>tolerance){//
+				if(fabs(uX)<uXmin){
+					if(fabs(pixelX-hWidth)>(double)tolerance){//
 						uX = copysign(uXmin,uX);
 					}
 					else uX = 0;
 				}
-				else if(abs(uX)>uXmax){
+				else if(fabs(uX)>uXmax){
 					uX = copysign(uXmax,uX);
 				}
-				if(abs(uY)<uYmin){
-					if(abs(pixelY-hHeight)>tolerance){//
+				if(fabs(uY)<uYmin){
+					if(fabs(pixelY-hHeight)>(double)tolerance){//
 						uY = copysign(uYmin,uY);
 					}
 				else uY = 0;
 				}
-				else if(abs(uY)>uYmax){
+				else if(fabs(uY)>uYmax){
 					uY = copysign(uYmax,uY);
 				}
 
@@ -623,6 +712,8 @@ int main(int argc, char **argv){
 		std::cout<< "Default angle of view mapping lab scale used.\n You can pass the arguments: [angleOfViewFar.txt] or [angleOfViewLabScale.txt]\n";
 		angleOfViewFile = "/home/guetgf/catkin_ws/src/kite_tracking/src/angleOfViewLabScale.txt";
 	}*/
+
+/*
 	angleOfViewFile = "/home/guetgf/catkin_ws/src/kite_tracking/src/angleOfViewLabScale.txt";
 // read in angle of view
 	std::vector<int> zoomlevelVec;
@@ -647,7 +738,7 @@ int main(int argc, char **argv){
 		std::cout << "Unable to open file";
 		return -1;
 	}
-
+*/
 /*
 	// generate specific input signal
 	double a = 0.25;
@@ -706,7 +797,7 @@ int main(int argc, char **argv){
 
 	ros::init(argc,argv,"LQR_node");
 
-	LQR cm(zoomlevelVec,angleOfViewXVec,angleOfViewYVec);
+	LQR cm;
 
 	ros::spin();
 	return 0;

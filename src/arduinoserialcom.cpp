@@ -72,18 +72,85 @@ private:
 	int zoomcounter = 0, zoomdelay = 6;
 	int  zoom = 171, zoommax = 171, zoommin = 0, zoomstep = 3, oldzoom = zoom;
 	float tsize, tsizefiltered; // target size
-	float tsizeUpperThrshld = 30, tsizeLowerThrshld = 25;
+	int tsizeUpperThrshld = 30, tsizeLowerThrshld = 25;
 	int loopcounter = 0;
 	std_msgs::Int16 zoomlevel;
 
 public:
 	// constructor
-	ArduinoCom(int SERIAL_FD){
-		serial_fd = SERIAL_FD;
-		
+	ArduinoCom(){
+		string serial_path = "/dev/ttyACM0";
+
 		zoom_level_pub_ = nh_.advertise<std_msgs::Int16>("zoomlevel",1);
 		focus_and_zoom_sub_ = nh_.subscribe("fandzmsg",1,&ArduinoCom::d_f_z_Callback,this);
 		shutdownkey_sub_ = nh_.subscribe("shutdownkey",1,&ArduinoCom::shutdownCb,this);
+		
+		// read parameters
+		if(nh_.hasParam("arduinoserial/focmin")){
+			bool success = nh_.getParam("arduinoserial/focmin",focmin);
+			ROS_INFO("Read ardnuino parameter focmin, success: %d	%d",focmin, success);
+		}
+		else ROS_INFO("Arduino param focmin not found");
+		if(nh_.hasParam("arduinoserial/focmax")){
+			bool success = nh_.getParam("arduinoserial/focmax",focmax);
+			ROS_INFO("Read ardnuino parameter focmax, success: %d	%d",focmax, success);
+		}
+		else ROS_INFO("Arduino param focmax not found");	
+		if(nh_.hasParam("arduinoserial/focusstep")){
+			bool success = nh_.getParam("arduinoserial/focusstep",focusstep);
+			ROS_INFO("Read ardnuino parameter focusstep, success: %d	%d",focusstep, success);
+		}
+		else ROS_INFO("Arduino param focusstep not found");		
+		if(nh_.hasParam("arduinoserial/focusscanstep")){
+			bool success = nh_.getParam("arduinoserial/focusscanstep",focusscanstep);
+			ROS_INFO("Read ardnuino parameter focusscanstep, success: %d	%d",focusscanstep, success);
+		}
+		else ROS_INFO("Arduino param focusscanstep not found");	
+		if(nh_.hasParam("arduinoserial/tsizeLowerThrshld")){
+			bool success = nh_.getParam("arduinoserial/tsizeLowerThrshld",tsizeLowerThrshld);
+			ROS_INFO("Read ardnuino parameter tsizeLowerThrshld, success: %d	%d",tsizeLowerThrshld, success);
+		}
+		else ROS_INFO("Arduino param tsizeLowerThrshld not found");
+		if(nh_.hasParam("arduinoserial/tsizeUpperThrshld")){
+			bool success = nh_.getParam("arduinoserial/tsizeUpperThrshld",tsizeUpperThrshld);
+			ROS_INFO("Read ardnuino parameter tsizeUpperThrshld, success: %d	%d",tsizeUpperThrshld, success);
+		}
+		else ROS_INFO("Arduino param tsizeLowerThrshld not found");
+		if(nh_.hasParam("arduinoserial/serial_path")){
+			bool success = nh_.getParam("arduinoserial/serial_path",serial_path);
+			ROS_INFO("Read ardnuino parameter serial_path, success: %s	%d",serial_path.c_str(), success);
+		}
+		else ROS_INFO("Arduino param serial_path not found");
+
+		//Setup Serial communication to arduino
+		serial_fd = open(serial_path.c_str(),O_RDWR|O_NOCTTY|O_NDELAY);
+		struct termios serial_settings;
+		// Try opening serial port
+		// int serial_fd = open(SERIAL_PATH,O_WRONLY|O_NOCTTY);//serial_fd = open(SERIAL_PATH,O_RDWR|O_NOCTTY);
+		if(serial_fd == -1){
+			ROS_INFO("Serial Port connection Failed. - shutdown");
+			ros::shutdown();
+		}
+		else{
+			//Get serial port settings
+			tcgetattr(serial_fd, &serial_settings); //Get Current Settings of the Port
+			cfsetispeed(&serial_settings,BAUDRATE); //Set Input Baudrate
+			cfsetospeed(&serial_settings,BAUDRATE); //Set Output Baudrate
+			serial_settings.c_cflag &= ~PARENB; //Mask Parity Bit as No Parity
+			serial_settings.c_cflag &= ~CSTOPB; //Set Stop Bits as 1 or else it will be 2
+			serial_settings.c_cflag &= ~CSIZE; //Clear the current no. of data bit setting
+			serial_settings.c_cflag |= CS8; //Set no. of data bits as 8 Bits
+
+			serial_settings.c_iflag = 0; //Mask Parity Bit as No Parity
+			serial_settings.c_oflag = 0;
+			serial_settings.c_lflag = 0;
+		if(tcsetattr(serial_fd, TCSAFLUSH, &serial_settings) < 0){
+			ROS_INFO("Setting up Serial Port settings Failed - shutdown");
+			ros::shutdown();
+		}
+		else
+			ROS_INFO("Serial Port connection Success.");
+		}
 	}
 	~ArduinoCom(){
 	}
@@ -116,9 +183,8 @@ public:
 			sendFocus();
 			firstscan = false;
 		}
-		else if(loopcounter>delay){
+		else if((loopcounter%(delay+1))>delay-1){
 			delay = smalldelay;
-			loopcounter = 0;
 			if(sharpness>sharpnessold){
 				scanfocmax = focus;
 			}
@@ -144,9 +210,7 @@ public:
 
 	void controlFocus(){
 		fsharpness += sharpness;
-		if(loopcounter>smalldelay){
-			fsharpness /= (smalldelay+2);
-			loopcounter = 0;
+		if((loopcounter%(smalldelay+1))>smalldelay-1){
 			if(fsharpness<fsharpnessold){
 				direction ^= true;
 			}
@@ -163,12 +227,13 @@ public:
 	void controlZoom(){
 		oldzoom = zoom;
 		if(!detectflag){
-			if(notdetectcounter > 9){
+			if(notdetectcounter > 29){
 				zoom = zoommax;
 				sendZoom();
+				loopcounter = 0;
 			}
 		}
-		else if (loopcounter==4){
+		else if (loopcounter > 15){
 			if(tsizefiltered>tsizeUpperThrshld){
 				zoom += zoomstep;
 				zoom = min(zoom, zoommax);
@@ -179,7 +244,7 @@ public:
 				zoom = max(zoom,zoommin);
 				sendZoom();
 			}
-			zoomcounter = 0;
+			loopcounter = 0;
 		}
 		if(zoom != oldzoom){
 			zoomlevel.data = zoom;
@@ -210,7 +275,7 @@ public:
 			notdetectcounter++;
 		}
 		else notdetectcounter = 0;
-		if(notdetectcounter>10){
+		if(notdetectcounter>30){ //>10
 			scanfocus = true;
 			notdetectcounter = 0;
 		}
@@ -229,49 +294,12 @@ public:
 };
 
 int main( int argc, char** argv ) {
-	string SERIAL_PATH = "/dev/ttyACM0";
-/*	if(argc == 2){
-		SERIAL_PATH = argv[1];
-		cout << "serial path to arduino is "<< argv[1] << "\n";
-	}
-	else{
-		cout << "Default serial path to arduino: /dev/tty/ACM0 \n change this by giving the path as argument\n";
-	}
-*/
-	// Open serial port to arduino++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-	int serial_fd = open(SERIAL_PATH.c_str(),O_RDWR|O_NOCTTY|O_NDELAY);
-	//Setup Serial communication
-	struct termios serial_settings;
-	// Try opening serial port
-	// int serial_fd = open(SERIAL_PATH,O_WRONLY|O_NOCTTY);//serial_fd = open(SERIAL_PATH,O_RDWR|O_NOCTTY);
-	if(serial_fd == -1){
-		printf("Serial Port connection Failed.\n");
-		return -1;
-	}
-	else{
-		//Get serial port settings
-		tcgetattr(serial_fd, &serial_settings); //Get Current Settings of the Port
-		cfsetispeed(&serial_settings,BAUDRATE); //Set Input Baudrate
-		cfsetospeed(&serial_settings,BAUDRATE); //Set Output Baudrate
-		serial_settings.c_cflag &= ~PARENB; //Mask Parity Bit as No Parity
-		serial_settings.c_cflag &= ~CSTOPB; //Set Stop Bits as 1 or else it will be 2
-		serial_settings.c_cflag &= ~CSIZE; //Clear the current no. of data bit setting
-		serial_settings.c_cflag |= CS8; //Set no. of data bits as 8 Bits
 
-		serial_settings.c_iflag = 0; //Mask Parity Bit as No Parity
-		serial_settings.c_oflag = 0;
-		serial_settings.c_lflag = 0;
-	if(tcsetattr(serial_fd, TCSAFLUSH, &serial_settings) < 0){
-		printf("Setting up Serial Port settings Failed");
-		return -1;
-	}
-	else
-		printf("Serial Port connection Success.\n\n");
-	}
-	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-	ros::init(argc,argv,"Zarduinoserialcom_node");
-	ArduinoCom ac(serial_fd);
+	ROS_INFO("before init");
+	ros::init(argc,argv,"arduinoserialcom_node");
+	ROS_INFO("after init");
+	ArduinoCom ac;
+	ROS_INFO("after class");
 	ros::spin();
 
 	return(0);

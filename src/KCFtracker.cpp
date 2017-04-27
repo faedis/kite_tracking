@@ -36,7 +36,8 @@ private:
 //	cv::Point2f targetpixelTracker;
 	geometry_msgs::Pose2D targetpixelAruco;
 //	cv::Point2f targetpixelAruco;
-	int roisize = 60; // size of region of interest
+	int roiSize = 60; // size of region of interest
+	int distanceLimit = 30; // maximal distance between aruco detection and tracking -> initialize tracker
 	int frWidth = 640;
 	int frHeight = 360;
 	bool centerdetectflag = false;
@@ -47,6 +48,7 @@ private:
 	bool trackercreated = false;
 	bool trackerdetectflag = false;
 	bool firstInitialization = true;
+	int arucoNotDetectCounter = 0;
 // Time:
 	struct timeval t1, t2;
 	double elapsedTime;
@@ -62,6 +64,27 @@ public:
 		//  [0] = detected 0 or 1, [1] = sharpness, [2] = target size, [3] = center detected
 		comparedpixelpos_pub_ = nh_.advertise<geometry_msgs::Pose2D>("comparedpixelpos",1);
 		gettimeofday(&t1, NULL);
+		// read parameters
+		if(nh_.hasParam("camera/frWidth")){
+			bool success = nh_.getParam("camera/frWidth",frWidth);
+			ROS_INFO("Read display parameter frWidth, success: %d	%d",frWidth, success);
+		}
+		else ROS_INFO("display param not found");
+		if(nh_.hasParam("camera/frHeight")){
+			bool success = nh_.getParam("camera/frHeight",frHeight);
+			ROS_INFO("Read parameter frHeight, success: %d	%d",frHeight, success);
+		}
+		else ROS_INFO("param height not found");
+		if(nh_.hasParam("KCFtracker/roiSize")){
+			bool success = nh_.getParam("KCFtracker/roiSize",roiSize);
+			ROS_INFO("Read parameter roiSize, success: %d	%d",roiSize, success);
+		}
+		else ROS_INFO("param roiSize not found");
+		if(nh_.hasParam("KCFtracker/distanceLimit")){
+			bool success = nh_.getParam("KCFtracker/distanceLimit",distanceLimit);
+			ROS_INFO("Read parameter distanceLimit, success: %d	%d",distanceLimit, success);
+		}
+		else ROS_INFO("param distanceLimit not found");
 	}
 
 	void imageCb(const sensor_msgs::ImageConstPtr& msg){
@@ -79,7 +102,7 @@ public:
 //		ROS_INFO("updateTracker");
 //			ROS_INFO("UPDATE");
 //			ROS_INFO("frame, roi width, roi height: %d	%f	%f",frame.cols, roi.width, roi.height);
-//			if((roi.width == roisize)&&(roi.height == roisize)){
+//			if((roi.width == roiSize)&&(roi.height == roiSize)){
 			trackerdetectflag = tracker->update(frame,roi);
 //			}
 //			else{
@@ -94,6 +117,14 @@ public:
 			else{
 				targetpixelTracker.x = roi.x + roi.width/2.0;
 				targetpixelTracker.y = roi.y + roi.height/2.0;
+				if(targetpixelTracker.x<(roiSize/2.0+1) || targetpixelTracker.x>(frWidth-roiSize/2.0-1)){
+					initializeflag = true;
+					trackerdetectflag = false;
+				}
+				else if(targetpixelTracker.y<(roiSize/2.0+1) || targetpixelTracker.y>(frHeight-roiSize/2.0-1)){
+					initializeflag = true;
+					trackerdetectflag = false;
+				}
 			}
 		}
 	}
@@ -115,7 +146,7 @@ public:
 	}
 
 	void pixelposCb(const geometry_msgs::Pose2D::ConstPtr& pixelpos){
-		if(((pow(targetpixelAruco.x-targetpixelTracker.x,2.0) + pow(targetpixelAruco.y - targetpixelTracker.y,2.0))>900)&&(targetpixelAruco.x>+0)){
+		if(((pow(targetpixelAruco.x-targetpixelTracker.x,2.0) + pow(targetpixelAruco.y - targetpixelTracker.y,2.0))>pow(distanceLimit,2.0))&&(targetpixelAruco.x>+0)){
 //				ROS_INFO("trackerdectectflag %f	%f", targetpixelAruco.y, targetpixelTracker.y);
 				trackerdetectflag = false;
 				initializeflag = true;			
@@ -128,10 +159,11 @@ public:
 	}
 	void fandzmsgCb(const std_msgs::Float32MultiArray::ConstPtr& fandzmsg){
 		centerdetectflag = fandzmsg->data[3];
+		if(!centerdetectflag) arucoNotDetectCounter++;
 //		ROS_INFO("centerdetectflag, initializeflag, trackerdet	%d	%d	%d", centerdetectflag, initializeflag, trackerdetectflag);
 		if(!trackerdetectflag && initializeflag && centerdetectflag){
 //			ROS_INFO("INITIALIZE");
-			roi = cv::Rect2d(targetpixelAruco.x - roisize/2.0, targetpixelAruco.y-roisize/2.0, roisize, roisize);//&cv::Rect2d(0,0,frWidth-1,frHeight-1);
+			roi = cv::Rect2d(targetpixelAruco.x - roiSize/2.0, targetpixelAruco.y-roiSize/2.0, roiSize, roiSize);//&cv::Rect2d(0,0,frWidth-1,frHeight-1);
 			initTracker();
 			comparedpixelpos.x = targetpixelAruco.x;
 			comparedpixelpos.y = targetpixelAruco.y;
@@ -159,10 +191,16 @@ public:
 			comparedpixelpos.theta = -10;
 			comparedpixelpos_pub_.publish(comparedpixelpos);
 		}
+		if(arucoNotDetectCounter>30){
+			trackerdetectflag = false;
+			initializeflag = true;
+			arucoNotDetectCounter = 0;
+		}
+
 		gettimeofday(&t2, NULL);
 		elapsedTime = (t2.tv_sec - t1.tv_sec)*1000;      // sec to ms
 		elapsedTime += (t2.tv_usec - t1.tv_usec)/1000;   // us to ms
-		ROS_INFO("time:	 %f", elapsedTime);
+//		ROS_INFO("time:	 %f", elapsedTime);
 	}
 	void shutdownCb(const std_msgs::Bool::ConstPtr& shutdownkey){
 		ROS_INFO("Shutdown");
