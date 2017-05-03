@@ -155,6 +155,12 @@ target_link_libraries(markerdetection_node
   ${catkin_LIBRARIES}
 )
 
+add_executable(singlemarkerdetection_node src/singlemarkerdetection.cpp)
+target_link_libraries(singlemarkerdetection_node
+  ${OpenCV_LIBRARIES}
+  ${catkin_LIBRARIES}
+)
+
 add_executable(arduinoserialcom_node src/arduinoserialcom.cpp)
 target_link_libraries(arduinoserialcom_node
   ${OpenCV_LIBRARIES}
