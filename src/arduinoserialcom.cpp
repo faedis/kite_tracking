@@ -58,8 +58,6 @@ private:
 	OFF = false,
 	ON = true,
 	detectflag = false, 
-	knowcenterflag = false,
-	oldknowcenterflag = false,
 	olddetectflag = false,
 	scanfocus = true,
 	direction = FAR,
@@ -151,6 +149,19 @@ public:
 		else
 			ROS_INFO("Serial Port connection Success.");
 		}
+		
+
+		sleep(3);
+		ostringstream cmd_buffg;
+		cmd_buffg << ">g,"<<16<<"<";
+		string cmdg = cmd_buffg.str();
+		write(serial_fd,cmdg.c_str(),cmdg.length());
+		sleep(1);
+		ostringstream cmd_buffe;
+		cmd_buffe << ">e,"<<2777<<"<";
+		string cmde = cmd_buffe.str();
+		write(serial_fd,cmde.c_str(),cmde.length());
+
 	}
 	~ArduinoCom(){
 	}
@@ -254,17 +265,14 @@ public:
 
 	void d_f_z_Callback(const std_msgs::Float32MultiArray::ConstPtr& fandzmsg){
 		loopcounter++;
-		// update knowcenterflag
-		oldknowcenterflag = knowcenterflag;
-		knowcenterflag = fandzmsg->data[3];
 		// update detect flag
 		olddetectflag = detectflag;
 		detectflag = fandzmsg->data[0];
 		//update sharpness
-		if(!oldknowcenterflag && knowcenterflag) sharpnessold = 0;
+		if(!olddetectflag && detectflag) sharpnessold = 0;
 		else sharpnessold = sharpness;
 		sharpness = fandzmsg->data[1];
-		// update zoom
+		// update target size and filter it
 		tsizefiltered = 0.8*tsizefiltered;
 		tsize = fandzmsg->data[2];
 		tsizefiltered += 0.2*tsize;

@@ -62,16 +62,16 @@ public:
 		tiltSpeed = ptucmd->y;
 		//gettimeofday(&t1, NULL);
 //		set_desired(PAN, SPEED, &panSpeed, ABSOLUTE);
-
+//		ROS_INFO("send cmd");
 		char answer = ptu_set_desired_velocities(panSpeed, tiltSpeed);
 		if(answer!=0){
 			ROS_INFO("error on vel sending:	%c", answer);
 		}
-
+//		ROS_INFO("cmd sent");
 //		ROS_INFO("velocity cmd:	%d", panSpeed);
 		//gettimeofday(&t2, NULL);
-		//elapsedTime = (t2.tv_sec - t1.tv_sec)*1000;      // sec to ms
-		//elapsedTime += (t2.tv_usec - t1.tv_usec)/1000;   // us to ms
+		//elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+		//elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
 		//ROS_INFO("speedcmd %f",elapsedTime);
 	}
 	// get PTU position and publish
@@ -81,18 +81,21 @@ public:
 		elapsedTime = 0;
 		while(elapsedTime<5){
 			gettimeofday(&t2, NULL);
-			elapsedTime = (t2.tv_sec - t1.tv_sec)*1000;      // sec to ms
-			elapsedTime += (t2.tv_usec - t1.tv_usec)/1000;   // us to ms
+			elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+			elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
 		}
 */
 /*
 		gettimeofday(&t1, NULL);
 		while(elapsedTime<7.5){
 			gettimeofday(&t2,NULL);
-			elapsedTime = (t2.tv_sec - t1.tv_sec)*1000;      // sec to ms
-			elapsedTime += (t2.tv_usec - t1.tv_usec)/1000;   // us to ms
+			elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+			elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
 		}
 */
+//		ROS_INFO("		query pos");
+		gettimeofday(&t1, NULL);
+		ROS_INFO("	time start");
 		char answer = get_current_positions(pPtr,tPtr);
 		if(answer==0){
 		ROS_INFO("error on pos reading:	%c", answer);
@@ -101,7 +104,11 @@ public:
 		ptupos.y = *tPtr;
 		ptupos.theta = 0;
 		ptupos_pub_.publish(ptupos);
-
+		gettimeofday(&t2,NULL);
+		elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+		elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
+		ROS_INFO("	elapsed time %f",elapsedTime);
+//		ROS_INFO("		pos querried");
 
 //		ROS_INFO("pos query:	%d", *pPtr);
 		//ROS_INFO("end query ");

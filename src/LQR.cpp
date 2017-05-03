@@ -386,8 +386,8 @@ public:
 			if(PTUctrl){
 
 				gettimeofday(&t2, NULL);
-				elapsedTime = (t2.tv_sec - t1.tv_sec)*1000;      // sec to ms
-				elapsedTime += (t2.tv_usec - t1.tv_usec)/1000;   // us to ms
+				elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+				elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
 				// update old inputs
 				ouXrad = uXrad;
 				ouYrad = uYrad;
@@ -428,38 +428,6 @@ public:
 				uX = round(uXrad/pRes);
 				uY = round(uYrad/tRes);
 		
-
-				// input rate limit:
-				if(fabs(uX-ouX)>deltaUXmax){
-					if(uX>ouX) uX = ouX + deltaUXmax;
-					else uX = ouX - deltaUXmax;
-					// correct small velocities (otherwise speed would be increased again
-					if(fabs(uX)<uXmin){
-						if(abs(pixelX-hWidth)>(double)tolerance){//
-							uX = copysign(uXmin,ouX);
-						}
-						else uX = 0;
-					}					
-				}
-				if(fabs(uY-ouY)>deltaUYmax){
-					if(uY>ouY) uY = ouY + deltaUYmax;
-					else uY = ouY - deltaUYmax;
-					// correct small velocities (otherwise speed would be increased again
-					if(fabs(uY)<uYmin){
-						if(abs(pixelY-hHeight)>(double)tolerance){//
-							uY = copysign(uYmin,ouY);
-						}
-					else uY = 0;
-					}
-				}		
-
-				// Additioinal input rate limit:
-/*				if(abs(uX)<abs(ouX)){
-					if(abs(uX-ouX)<59){
-						uX = ouX;				
-					}
-				}
-*/
 				// input limits:
 				if(fabs(uX)<uXmin){
 					if(fabs(pixelX-hWidth)>(double)tolerance){//
@@ -480,6 +448,49 @@ public:
 					uY = copysign(uYmax,uY);
 				}
 
+				// input rate limit:
+				if(fabs(uX-ouX)>deltaUXmax){
+					if(uX>ouX) uX = ouX + deltaUXmax;
+					else uX = ouX - deltaUXmax;
+					// correct small velocities (otherwise speed would be increased again
+					if(fabs(uX)<uXmin){
+						if(fabs(pixelX-hWidth)>(double)tolerance){//
+							uX = copysign(uXmin,ouX);
+							if(fabs(uX-ouX)>deltaUXmax){
+								if(fabs(ouX)>deltaUXmax) uX = copysign(uXmin,ouX);
+								else if(fabs(ouX)<deltaUXmax) uX = -copysign(uXmin,ouX);
+								else uX = 0;
+							}
+						}
+						else uX = 0;
+					}					
+				}
+				if(fabs(uY-ouY)>deltaUYmax){
+					if(uY>ouY) uY = ouY + deltaUYmax;
+					else uY = ouY - deltaUYmax;
+					// correct small velocities (otherwise speed would be increased again
+					if(fabs(uY)<uYmin){
+						if(fabs(pixelY-hHeight)>(double)tolerance){//
+							uY = copysign(uYmin,ouY);
+							if(fabs(uY-ouY)>deltaUYmax){
+								if(fabs(ouY)>deltaUYmax) uY = copysign(uYmin,ouY);
+								else if(fabs(ouY)<deltaUYmax) uY = -copysign(uYmin,ouY);
+								else uY = 0;
+							}
+						}
+					else uY = 0;
+					}
+				}		
+
+				// Additioinal input rate limit:
+/*				if(abs(uX)<abs(ouX)){
+					if(abs(uX-ouX)<59){
+						uX = ouX;				
+					}
+				}
+*/
+
+
 				// Examine only pan
 				//uY = 0;
 
@@ -492,7 +503,7 @@ public:
 				ptucmd.y = round(uY); //floor
 				ptucmd.theta = 0;
 				ptucmd_pub_.publish(ptucmd);
-//				ROS_INFO("cmd");
+//				ROS_INFO("cmd sent");
 				if(collectdata){
 					timeVec.push_back(elapsedTime);
 					exVec.push_back(eX);
@@ -554,8 +565,8 @@ public:
 //		ROS_INFO("POSITION ARRIVED");
 //additional!!!
 		gettimeofday(&t2, NULL);
-		elapsedTime = (t2.tv_sec - t1.tv_sec)*1000;      // sec to ms
-		elapsedTime += (t2.tv_usec - t1.tv_usec)/1000;   // us to ms
+		elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+		elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
 
 		if(collectdata){
 			timePosVec.push_back(elapsedTime);

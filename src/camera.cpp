@@ -95,13 +95,13 @@ int main(int argc, char** argv)
 		grabbed_pub.publish(grabbed);
 		}
 		//gettimeofday(&t2, NULL);
-		//elapsedTime = (t2.tv_sec - t1.tv_sec)*1000;      // sec to ms
-		//elapsedTime += (t2.tv_usec - t1.tv_usec)/1000;   // us to ms
+		//elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+		//elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
 		//ROS_INFO("time grab: %f", elapsedTime);
 		cap.retrieve(frame);
 		//gettimeofday(&t2, NULL);
-		//elapsedTime = (t2.tv_sec - t1.tv_sec)*1000;      // sec to ms
-		//elapsedTime += (t2.tv_usec - t1.tv_usec)/1000;   // us to ms
+		//elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+		//elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
 		//ROS_INFO("time retrieved: %f", elapsedTime);
 		if(secondframecounter){
 			if(!frame.empty()){
