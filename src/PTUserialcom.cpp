@@ -15,6 +15,7 @@ querries ptu position and sends velocity commands
 #include <math.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <chrono>
 extern "C" {
 #include <stdio.h>
 #include <ctype.h>
@@ -25,8 +26,15 @@ extern "C" {
 
 using namespace std;
 
-portstream_fd COMstream;			// creat PTU handle
+typedef unsigned long long nk_time;
 
+static nk_time nk_timestamp(){ // returns an unsigned long long with the milliseconds passed since 1970
+    return static_cast<nk_time> (std::chrono::duration_cast<std::chrono::microseconds> (std::chrono::high_resolution_clock::now().time_since_epoch()).count());
+}
+
+
+portstream_fd COMstream;			// creat PTU handle
+struct timeval t10, t11, t13;
 class PTUSubAndPub{
 
 private:
@@ -45,7 +53,10 @@ private:
 	signed short* pPtr = &pPos;
 	signed short* tPtr = &tPos;
 	struct timeval t1, t2;
-	double elapsedTime=0;
+	double elapsedTime=0, elapsedTime2 = 0;
+	nk_time nk1 =0, nk2 = 0, dnk;
+	ros::Time s_ros, e_ros;
+	double elapsedRos = 0;
 public:
 	PTUSubAndPub(){
 		// publisher
@@ -60,19 +71,21 @@ public:
 	void ptucmdCb(const geometry_msgs::Pose2D::ConstPtr& ptucmd){
 		panSpeed = ptucmd->x;
 		tiltSpeed = ptucmd->y;
-		//gettimeofday(&t1, NULL);
+		gettimeofday(&t1, NULL);
 //		set_desired(PAN, SPEED, &panSpeed, ABSOLUTE);
-//		ROS_INFO("send cmd");
+//		ROS_INFO("ptu cmd");
+		nk1 = nk_timestamp();
 		char answer = ptu_set_desired_velocities(panSpeed, tiltSpeed);
 		if(answer!=0){
 			ROS_INFO("error on vel sending:	%c", answer);
 		}
 //		ROS_INFO("cmd sent");
 //		ROS_INFO("velocity cmd:	%d", panSpeed);
-		//gettimeofday(&t2, NULL);
-		//elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
-		//elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
-		//ROS_INFO("speedcmd %f",elapsedTime);
+		gettimeofday(&t2, NULL);
+		nk2 = nk_timestamp();
+		elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+		elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
+		ROS_INFO("cmd sent %f	%d",elapsedTime, nk2-nk1);
 	}
 	// get PTU position and publish
 	void grabbedCb(const std_msgs::Bool::ConstPtr& grabbed){
@@ -95,19 +108,27 @@ public:
 */
 //		ROS_INFO("		query pos");
 		gettimeofday(&t1, NULL);
-		ROS_INFO("	time start");
+//		s_ros = ros::Time::now();
+//		ROS_INFO("		pos query");
+		nk1 = nk_timestamp();
 		char answer = get_current_positions(pPtr,tPtr);
 		if(answer==0){
 		ROS_INFO("error on pos reading:	%c", answer);
 		}
+		gettimeofday(&t2,NULL);
+		elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+		elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
+		nk2 = nk_timestamp();
+		ROS_INFO("query sent %f	%d",elapsedTime, nk2-nk1);
 		ptupos.x = *pPtr;
 		ptupos.y = *tPtr;
 		ptupos.theta = 0;
 		ptupos_pub_.publish(ptupos);
-		gettimeofday(&t2,NULL);
-		elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
-		elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
-		ROS_INFO("	elapsed time %f",elapsedTime);
+
+		//e_ros = ros::Time::now();
+
+//		elapsedRos = (e_ros-s_ros).toNSec()/1000000.0;
+
 //		ROS_INFO("		pos querried");
 
 //		ROS_INFO("pos query:	%d", *pPtr);
@@ -237,6 +258,7 @@ int main( int argc, char** argv ) {
 
 	ros::init(argc, argv, "ptuserialcom_node");
 	PTUSubAndPub ptusap;
+	gettimeofday(&t10,NULL);
 	ros::spin();
 
 

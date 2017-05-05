@@ -39,10 +39,12 @@ class ArduinoCom{
 
 	ros::NodeHandle nh_;
 	ros::Publisher zoom_level_pub_;
+	ros::Publisher focus_level_pub_;
 	ros::Subscriber focus_and_zoom_sub_;
 	ros::Subscriber shutdownkey_sub_;
 private:
-	int serial_fd; 
+	int serial_fd;
+	int fps = 60; 
 	// Focus variables
 	int focus;
 	int focmin = 650;
@@ -61,11 +63,13 @@ private:
 	olddetectflag = false,
 	scanfocus = true,
 	direction = FAR,
-	firstscan = true;
+	firstscan = true,
+	detected_during_scan = false;
+	
 	int scanfocmax;
 	int focuscounter = 0;
 	int notdetectcounter = 0;
-	double sharpness, sharpnessold = 0, fsharpness, fsharpnessold;
+	double sharpness, sharpnessold = 0, sharpnessmax = 0, fsharpness, fsharpnessold;
 	// Zoom variables
 	int zoomcounter = 0, zoomdelay = 6;
 	int  zoom = 171, zoommax = 171, zoommin = 0, zoomstep = 3, oldzoom = zoom;
@@ -73,6 +77,7 @@ private:
 	int tsizeUpperThrshld = 30, tsizeLowerThrshld = 25;
 	int loopcounter = 0;
 	std_msgs::Int16 zoomlevel;
+	std_msgs::Int16 focuslevel;
 
 public:
 	// constructor
@@ -80,10 +85,16 @@ public:
 		string serial_path = "/dev/ttyACM0";
 
 		zoom_level_pub_ = nh_.advertise<std_msgs::Int16>("zoomlevel",1);
+		focus_level_pub_ = nh_.advertise<std_msgs::Int16>("focuslevel",1);
 		focus_and_zoom_sub_ = nh_.subscribe("fandzmsg",1,&ArduinoCom::d_f_z_Callback,this);
 		shutdownkey_sub_ = nh_.subscribe("shutdownkey",1,&ArduinoCom::shutdownCb,this);
 		
 		// read parameters
+		if(nh_.hasParam("camera/fps")){
+			bool success = nh_.getParam("camera/fps",fps);
+			ROS_INFO("Read arduino parameter success, fps: %d	%d",fps, success);
+		}
+		else ROS_INFO("LQR param not found");
 		if(nh_.hasParam("arduinoserial/focmin")){
 			bool success = nh_.getParam("arduinoserial/focmin",focmin);
 			ROS_INFO("Read ardnuino parameter focmin, success: %d	%d",focmin, success);
@@ -151,16 +162,21 @@ public:
 		}
 		
 
-		sleep(3);
+		sleep(3); // set gain on maximum
 		ostringstream cmd_buffg;
 		cmd_buffg << ">g,"<<16<<"<";
 		string cmdg = cmd_buffg.str();
 		write(serial_fd,cmdg.c_str(),cmdg.length());
-		sleep(1);
+		sleep(1); // set shutter speed on 1/360 (inverse*10^6)
 		ostringstream cmd_buffe;
 		cmd_buffe << ">e,"<<2777<<"<";
 		string cmde = cmd_buffe.str();
 		write(serial_fd,cmde.c_str(),cmde.length());
+		sleep(1);
+		ostringstream cmd_buffv;
+		cmd_buffv << ">v,"<<fps<<","<< 0<<","<< 3 <<","<<0<<","<<0<<"<";
+		string cmdv = cmd_buffv.str();
+		write(serial_fd,cmdv.c_str(),cmdv.length());
 
 	}
 	~ArduinoCom(){
@@ -188,33 +204,42 @@ public:
 	void scanFocus(){
 		if(firstscan){
 //	ROS_INFO("FIRSTSCAN");
-			loopcounter = 0;
-			delay = largedelay;
-			focus = focmin;
-			sendFocus();
-			firstscan = false;
+				detected_during_scan = false;
+				sharpnessmax = 0;
+				delay = largedelay;
+				focus = focmin;
+				sendFocus();
+				firstscan = false;
+				focuslevel.data = focus;
+				focus_level_pub_.publish(focuslevel);
 		}
 		else if((loopcounter%(delay+1))>delay-1){
 			delay = smalldelay;
-			if(sharpness>sharpnessold){
+			if(sharpness>sharpnessmax){
+				sharpnessmax = sharpness;
 				scanfocmax = focus;
 			}
 			focus += focusscanstep;
+			if(detectflag) detected_during_scan = true;
 			if(focus>focmax){
-				scanfocus = false;
+				if(detected_during_scan){
+					focus = scanfocmax;
+					scanfocus = false;
+					direction = FAR;
+				}
 				firstscan = true;
-				focus = scanfocmax;
-				loopcounter = 0;
 			}
-			if(detectflag){
+/*			if(detectflag){
 				scanfocus = false;
 				firstscan = true;
 				direction = FAR;
 				loopcounter = 0;
 	//			focus -= focusscanstep;
-			}
+			}*/
 //	ROS_INFO("scan");
 			sendFocus();
+			focuslevel.data = focus;
+			focus_level_pub_.publish(focuslevel);
 		}
 
 	}
@@ -227,11 +252,16 @@ public:
 			}
 			if(direction == NEAR) focus -= focusstep;
 			else focus += focusstep;
+			if(fsharpness<1080.0){
+				scanfocus = true;
+			}
 			focus = min(focmax, focus);
 			focus = max(focmin, focus);
 			fsharpnessold = fsharpness;
 			fsharpness = 0;
 			sendFocus();
+			focuslevel.data = focus;
+			focus_level_pub_.publish(focuslevel);
 		}
 	}
 
@@ -291,7 +321,6 @@ public:
 			scanFocus();
 		}
 		else controlFocus();
-
 		controlZoom();
 	}
 

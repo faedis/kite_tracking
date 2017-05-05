@@ -115,7 +115,7 @@ std::map<int,double> mapAngleOfViewY;
 std::ofstream myfile;
 int filenumber = 0;
 bool collectdata = false, writedata = false;
-struct timeval t1, t2;
+struct timeval t1, t2, t3,t4;
 double elapsedTime;
 bool errorarrived = false, ptuposarrived = false;
 bool firstloop = true, secondloop = true, thirdloop = true;
@@ -194,6 +194,7 @@ double
 K1 = 3.1448,//3.1448,//2.4978,//			// LQR gain 1
 K2 = 0.6103,//0.6103,//0.4593,//			// LQR gain 2
 Ts = 0.03333;			// sampling time
+int fps = 60;
 
 // kalman filter parameters
 // reference
@@ -209,8 +210,8 @@ My2 = 10.7716;//10.7716,
 
 public:
 	LQR(){
-//		pixelpos_sub_ = nh_.subscribe("pixelpos",1,&LQR::pixelposCb,this);
-		comparedpixelpos_sub_ = nh_.subscribe("comparedpixelpos",1,&LQR::comparedpixelposCb,this);
+		pixelpos_sub_ = nh_.subscribe("pixelpos",1,&LQR::pixelposCb,this);
+//		comparedpixelpos_sub_ = nh_.subscribe("comparedpixelpos",1,&LQR::comparedpixelposCb,this);
 		waitkey_sub_  = nh_.subscribe("waitkey",1,&LQR::waitkeyCb,this);
 		shutdownkey_sub_ = nh_.subscribe("shutdownkey",1,&LQR::shutdownCb,this);
 		ptupos_sub_ = nh_.subscribe("ptupos",1,&LQR::ptuposCb,this);
@@ -223,6 +224,13 @@ public:
 			ROS_INFO("Read LQR parameter frWidth, success: %d	%d",frWidth, success);
 		}
 		else ROS_INFO("LQR param not found");
+		if(nh_.hasParam("camera/fps")){
+			bool success = nh_.getParam("camera/fps",fps);
+			ROS_INFO("Read LQR parameter fps, success: %d	%d",fps, success);
+		}
+		else ROS_INFO("LQR param not found");
+		Ts = 2.0/(double)fps;
+		ROS_INFO("Ts = %f",Ts);
 		if(nh_.hasParam("camera/frHeight")){
 			bool success = nh_.getParam("camera/frHeight",frHeight);
 			ROS_INFO("Read LQR parameter frHeight, success: %d	%d",frHeight, success);
@@ -300,7 +308,12 @@ public:
 			ROS_INFO("Unable to open file\n shutdown");
 			ros::shutdown();
 		}
-
+		if(fps == 30){
+			K1 = 2.858;
+			K2 = 0.7821;
+			Mx1 = 0.9704;
+			Mx2 = 13.7185;
+		}
 
 		kx.kalmanInit(Ts, Mx1, Mx2);
 		ky.kalmanInit(Ts, My1, My2);
@@ -318,41 +331,46 @@ public:
 	}
 	~LQR(){
 	}
-//	void pixelposCb(const geometry_msgs::Pose2D::ConstPtr& pixelpos){
-	void comparedpixelposCb(const geometry_msgs::Pose2D::ConstPtr& comparedpixelpos){
-		if(ptuposarrived){
-			pixelX = comparedpixelpos->x;
-			pixelY = comparedpixelpos->y;
-			tsize = comparedpixelpos->theta;
+	void pixelposCb(const geometry_msgs::Pose2D::ConstPtr& pixelpos){
+//	void comparedpixelposCb(const geometry_msgs::Pose2D::ConstPtr& comparedpixelpos){
+		if(true){ //ptuposarrived
+//			pixelX = comparedpixelpos->x;
+//			pixelY = comparedpixelpos->y;
+//			tsize = comparedpixelpos->theta;
+			pixelX = pixelpos->x;
+			pixelY = pixelpos->y;
+			tsize = pixelpos->theta;
 			if(pixelX>=0){
 			// assign errors
 			eX = -alphaX * (pixelX - (double)hWidth) / (double)hWidth;
 			eY = -alphaY * (pixelY - (double)hHeight) / (double)hHeight;
 			}
-			else{
-				eX = 0.8*eX;
-				eY = 0.8*eY;
-			pixelX = (double)hWidth;
-			pixelY = (double)hHeight;
-			}
+
 
 
 			// update and publish target position if all information has arrvied
 			errorarrived = true;
 			if(ptuposarrived){
 				orX = rX;
-//				rX = yX + eX;
-				rX = oyX+eX; // take camera delay into account
 				orY = rY;
-//				rY = yY + eY;
-				rY = oyY+eY;
-				errorarrived = false, ptuposarrived = false;
+				if(pixelX>=0){
+					rX = oyX+eX; // take camera delay into account
+					rY = oyY+eY;
+				}
+				else{
+					rX = 0.98*rX;
+					rY = 0.98*rY;
+					pixelX = (double)hWidth;
+					pixelY = (double)hHeight;
+				}
+				ptuposarrived = false;
 				targetpos.x = rX;
 				targetpos.y = rY;
 				targetpos.theta = 0;
 				targetpos_pub_.publish(targetpos);
 				//ROS_INFO("e, r, x 	%f	%f	%f",eX,rX,oyX);
-/*	
+	
+/*
 				if(PTUctrl){
 				// Specific Reference Signal:
 					if(speccount<rspec.size()){
@@ -369,6 +387,7 @@ public:
 				speccount++;
 				}
 */
+
 /////////////////////////////////////////////////////////////////////////
 				// Kalman Filter +++++++++++++++++++++++++++++++++++++++
 
@@ -381,6 +400,57 @@ public:
 				ky.kalman(oyY);
 /////////////////////////////////////////////////////////////////////////
 //				ROS_INFO("r,rx, rx2 		%f	%f	%f",rX, krx.getestimate(), krx.getstate2());
+
+			}
+			else{
+				oyX = yX;
+				oyY = yY;
+				yX = kx.getstate1();
+				yY = ky.getstate1();
+
+				orX = rX;
+				orY = rY;
+				if(pixelX>=0){
+					rX = oyX+eX; // take camera delay into account
+					rY = oyY+eY;
+				}
+				else{
+					rX = 0.98*rX;
+					rY = 0.98*rY;
+					pixelX = (double)hWidth;
+					pixelY = (double)hHeight;
+				}
+				ROS_INFO("pos not arrived!!");
+/*				if(PTUctrl){
+				// Specific Reference Signal:
+					if(speccount<rspec.size()){
+						rX = rspec[speccount];
+						rY = 0;
+						eX = rX - yX;
+					}
+					else{
+						rX = orX;
+						rY = orY;
+					}
+				rY = 0;
+				eY = 0;
+				speccount++;
+				}
+
+*/
+
+				ptuposarrived = false;
+				targetpos.x = rX;
+				targetpos.y = rY;
+				targetpos.theta = 0;
+				targetpos_pub_.publish(targetpos);	
+				// update:
+				// Reference
+				krx.kalman(rX);
+				kry.kalman(rY);
+				// PTU position
+				kx.kalman(oyX); // take camera delay into account -> oyX instead of yX
+				ky.kalman(oyY);			
 
 			}
 			if(PTUctrl){
@@ -411,9 +481,9 @@ public:
 					uYrad = K1*(kry.getestimate() - ky.getestimate()) + K2*(kry.getostate2() - ouYrad) + kry.getstate2() - kry.getostate2() + ouYrad;
 				}
 
-/*
+
 				//specific input signal
-		
+/*
 				if(speccount<uspec.size()){
 					uXrad = uspec[speccount];
 					uYrad = 0;
@@ -533,48 +603,63 @@ public:
 			}
 			else{
 				// input rate limit:
-				if(abs(uXrad)>deltaUXmax){
-					if(uXrad>0) uXrad = ouXrad - deltaUXmax;
-					else uXrad = ouXrad + deltaUXmax;
+				uX = 0;
+				uY = 0;
+				if(fabs(uX-ouX)>deltaUXmax){
+					if(uX>ouX) uX = ouX + deltaUXmax;
+					else uX = ouX - deltaUXmax;
+					// correct small velocities (otherwise speed would be increased again
+					if(fabs(uX)<uXmin){
+						uX = 0;
+					}
 				}
-				else uXrad = 0;
-				if(abs(uXrad)<uXmin) uXrad =0;
-				if(abs(uYrad)>deltaUYmax){
-					if(uYrad>0) uYrad = ouYrad - deltaUYmax;
-					else uYrad = ouYrad + deltaUYmax;
-				}
-				else uYrad = 0;
-				if(abs(uYrad)<uYmin) uYrad = 0;
-				uX = uXrad/pRes;
-				uY = uYrad/tRes;
+				if(fabs(uY-ouY)>deltaUYmax){
+					if(uY>ouY) uY = ouY + deltaUYmax;
+					else uY = ouY - deltaUYmax;
+					// correct small velocities (otherwise speed would be increased again
+					if(fabs(uY)<uYmin){
+						uY = 0;
+					}
+				}	
 				// send ptucmd
-				ptucmd.x = round(uX);
-				ptucmd.y = round(uY);
+				ptucmd.x = uX;
+				ptucmd.y = uY;
 				ptucmd.theta = 0;
 				ptucmd_pub_.publish(ptucmd);
+				ouX = uX;
+				ouY = uY;
+				ouXrad = uX*pRes;
+				ouYrad = uY*tRes;
 			}
+//		ROS_INFO("lqr send");
 		}
+
 	}
 	void ptuposCb(const geometry_msgs::Pose2D::ConstPtr& ptupos){
 		//update states yx, yy and old ones
-		oyX = yX;
-		yX = ptupos->x * pRes;
-		oyY = yY;
-		yY = ptupos->y * tRes;
-		ptuposarrived = true;
+//		ROS_INFO("		lqr rec");
+		if(errorarrived){
+			oyX = yX;
+			yX = ptupos->x * pRes;
+			oyY = yY;
+			yY = ptupos->y * tRes;
+			ptuposarrived = true;
+			errorarrived = false;
+		
 //		ROS_INFO("POSITION ARRIVED");
 //additional!!!
-		gettimeofday(&t2, NULL);
-		elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
-		elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
+			gettimeofday(&t2, NULL);
+			elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+			elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
 
-		if(collectdata){
-			timePosVec.push_back(elapsedTime);
+			if(collectdata){
+				timePosVec.push_back(elapsedTime);
+			}
 		}
 		if(writedata){
 				writedata = false;
 				std::stringstream ss;
-				ss << "ManipSinusoidalCheckOsci0419_" <<std::setfill('0')<<std::setw(3)<<
+				ss << "SpecR_" <<std::setfill('0')<<std::setw(3)<<
 					filenumber <<".txt";
 				std::string filename = ss.str();
 				myfile.open(filename.c_str());
@@ -642,7 +727,7 @@ public:
 				gettimeofday(&t1, NULL);
 
 				collectdata ^= true;
-				errorarrived = false;
+				errorarrived = true;
 				ptuposarrived = false;
 				if(collectdata){
 					timeVec.clear();
@@ -805,6 +890,25 @@ int main(int argc, char **argv){
 		rspec.push_back(0.401);
 	}	
 */
+
+	double a = 0.5;
+	for (int i = 0; i<11; i++){
+		rspec.push_back(0.0);
+	}
+	for (int i = 0; i <16; i++){
+		rspec.push_back((double)i*a/15.0);
+	}
+
+	for (int i = 0; i<180; i++){
+		rspec.push_back(a*cos((double)i*2.0*M_PI/90.0));
+	}
+	for (int i = 0; i <30; i++){
+		rspec.push_back(a-((double)i*a/30.0));
+	}
+	for(int i = 0; i<rspec.size();i++){
+		std::cout << rspec[i] <<"\n";
+	}
+
 
 	ros::init(argc,argv,"LQR_node");
 

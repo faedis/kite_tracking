@@ -63,6 +63,7 @@ cv::Mat grayFrame;
 cv::Point target;
 int frWidth = 640;
 int frHeight = 360;
+double artDelay = 14.0;
 // Messages
 geometry_msgs::Pose2D pixelpos;
 //std_msgs::Bool detectmsg;
@@ -70,14 +71,15 @@ std_msgs::Float32MultiArray fandzmsg;
 std::string winName = "ArucoDetection";
 bool detectflag = false;
 // Aruco Variables
-int dictNumber = 10;
-int markerSize = 5;
+int dictNumber = 1;
+int markerSize = 3;
 std::vector< int > markerIds;
 std::vector<std::vector<cv::Point2f> > markerCorners, rejectedCandidates;
 cv::Point2f v01, v03, v21, v23;
 float area1, area2;
 //cv::aruco::DetectorParameters parameters;
 cv::Ptr<cv::aruco::DetectorParameters> parameters = cv::aruco::DetectorParameters::create();
+
 //cv::aruco::Dictionary dictionary = cv::aruco::generateCustomDictionary(dictNumber,markerSize);
 cv::Ptr<cv::aruco::Dictionary> dictionary;
 cv::Point2f targetCenter;
@@ -117,8 +119,19 @@ public:
 			ROS_INFO("Read parameter markerSize, success: %d	%d",markerSize, success);
 		}
 		else ROS_INFO("param dictNumber not found");
+		if(nh_.hasParam("singlemarkerdetection/artDelay")){
+			bool success = nh_.getParam("singlemarkerdetection/artDelay",artDelay);
+			ROS_INFO("Read parameter artDelay, success: %f	%d",artDelay, success);
+		}
+		else ROS_INFO("param artDelay not found");
 
 		dictionary = cv::aruco::generateCustomDictionary(dictNumber,markerSize);
+		parameters->adaptiveThreshWinSizeMax = 23.0;	//default
+		parameters->adaptiveThreshWinSizeMin = 3.0;		// default	
+		parameters->adaptiveThreshWinSizeStep = 20.0;	// default = 10
+		parameters->adaptiveThreshConstant = 13.0;		// default = 7
+		parameters->minMarkerPerimeterRate = 0.04;		// defualt = 0.03
+		parameters->maxMarkerPerimeterRate = 0.4;		// default = 4
 
 	}
 
@@ -132,6 +145,7 @@ public:
 
 	void imageCb(const sensor_msgs::ImageConstPtr& msg){
 		//ROS_INFO("callback:");
+		gettimeofday(&t1,NULL);
 		cv_bridge::CvImageConstPtr cv_ptr;
 		try{
 			cv_ptr = cv_bridge::toCvShare(msg, sensor_msgs::image_encodings::BGR8);
@@ -141,17 +155,14 @@ public:
 			return;
 		}
 //ROS_INFO("received and read:");
-
+//		ROS_INFO("frame received");
 		cv::cvtColor(cv_ptr->image,grayFrame, CV_BGR2GRAY);
 		cv::aruco::detectMarkers(grayFrame, dictionary, markerCorners, markerIds);
-/*			gettimeofday(&t2, NULL);
-			elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
-			elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
-		ROS_INFO("time of detection: %f", elapsedTime);
-*/
+//		ROS_INFO("time of detection: %f", elapsedTime);
+
 
 		if(!markerCorners.empty()){
-
+//			ROS_INFO("			marker detected!");
 			if (markerIds[0] == 0){
 				detectflag = true;
 				targetCenter = (markerCorners[0][0] + markerCorners[0][1] + markerCorners[0][2] + markerCorners[0][3])/4.0;
@@ -180,10 +191,18 @@ public:
 			pixelpos.theta = -10;
 			detectflag = false;
 		}
+		gettimeofday(&t2, NULL);
+		elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+		elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
+		while(elapsedTime<artDelay){
+			gettimeofday(&t2, NULL);
+			elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+			elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
+		}
 
 
 		pixelpos_pub_.publish(pixelpos);
-
+//		ROS_INFO("time of detection: %f", elapsedTime);
 
 
 // Calculate target size
@@ -210,7 +229,7 @@ public:
 // these messages are all in focus_and_zoom
 
 		if(detectflag && (fandzmsg.data[2]>3)){
-		focusmeasure = LaplaceVarFocus(grayFrame(cv::Rect(round(pixelpos.x-4*fandzmsg.data[2]/2.0),round(pixelpos.y-4*fandzmsg.data[2]/2.0), round(4*fandzmsg.data[2]), round(4*fandzmsg.data[2]))&cv::Rect(0,0,frWidth-1,frHeight-1)));
+		focusmeasure = LaplaceVarFocus(grayFrame(cv::Rect(round(pixelpos.x-6*fandzmsg.data[2]/2.0),round(pixelpos.y-6*fandzmsg.data[2]/2.0), round(6*fandzmsg.data[2]), round(6*fandzmsg.data[2]))&cv::Rect(0,0,frWidth-1,frHeight-1)));
 		}
 		else focusmeasure = LaplaceVarFocus(grayFrame);
 
