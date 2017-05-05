@@ -2,7 +2,7 @@
 	<node name="camera" pkg="kite_tracking" type="camera_node" output="screen">
 		<param name="frWidth" value="640" type="int"/>
 		<param name="frHeight" value="360" type="int"/>
-		<param name="fps" value="60" type="int"/>
+		<param name="fps" value="30" type="int"/>
 		<param name="cameraNumber" value="0" type="int"/>
 	</node>
 
@@ -10,13 +10,15 @@
 
 	<node name="singlemarkerdetection" pkg="kite_tracking" type="singlemarkerdetection_node" output="screen">
 		<param name="dictNumber" value="1" type="int"/>
-		<param name="markerSize" value="3" type="int"/>		
+		<param name="markerSize" value="3" type="int"/>	
+		<param name="artDelay" value = "40" type="double"/>	
 	</node>
 
-	<node name="KCFtracker" pkg="kite_tracking" type="kcftracker_node" output="screen">
-		<param name="roiSize" value="60" type="int"/>
-		<param name="distanceLimit" value="30" type="int"/>
-	</node>
+	<!-- node name="KCFtracker" pkg="kite_tracking" type="kcftracker_node" output="screen" -->
+		<!-- param name="roiSize" value="60" type="int"/ -->
+		<!-- param name="distanceLimit" value="30" type="int"/ -->
+		<!-- param name= "trackingDelay" value="8" type="double"/ -->
+	<!-- /node -->
 
 	<node name="lqr" pkg="kite_tracking" type="LQR_node" output="screen">
 		<param name="pRes" value="0.0004487988119946330" type="double"/>
@@ -33,11 +35,11 @@
 
 	<node name="arduinoserial" pkg="kite_tracking" type="arduinoserialcom_node" output="screen">
 		<param name="focmin" value="650" type="int"/>	
-		<param name="focmax" value="800" type="int"/>		
-		<param name="focusstep" value="3" type="int"/>
+		<param name="focmax" value="785" type="int"/>		
+		<param name="focusstep" value="5" type="int"/>
 		<param name="focusscanstep" value="10" type="int"/>	
-		<param name="tsizeUpperThrshld" value="30" type="int"/>				
-		<param name="tsizeLowerThrshld" value="25" type="int"/>
+		<param name="tsizeUpperThrshld" value="15" type="int"/>				
+		<param name="tsizeLowerThrshld" value="10" type="int"/>
 		<param name="serial_path" value="/dev/ttyACM0" type="str"/>
 	</node>
 

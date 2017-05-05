@@ -33,6 +33,7 @@ private:
 	cv::Mat frame;
 	cv::Rect2d roi;
 	geometry_msgs::Pose2D targetpixelTracker;
+	double artDelay = 8.0; // artificial delay
 //	cv::Point2f targetpixelTracker;
 	geometry_msgs::Pose2D targetpixelAruco;
 //	cv::Point2f targetpixelAruco;
@@ -82,6 +83,11 @@ public:
 			ROS_INFO("Read parameter distanceLimit, success: %d	%d",distanceLimit, success);
 		}
 		else ROS_INFO("param distanceLimit not found");
+		if(nh_.hasParam("KCFtracker/trackingDelay")){
+			bool success = nh_.getParam("KCFtracker/trackingDelay",artDelay);
+			ROS_INFO("Read parameter trackingDelay, success: %f	%d",artDelay, success);
+		}
+		else ROS_INFO("param trackingDelay not found");
 	}
 
 	void initTracker(){
@@ -163,6 +169,16 @@ public:
 			comparedpixelpos.y = targetpixelAruco.y;
 			comparedpixelpos.theta = targetpixelAruco.theta;
 			// publish data from aruco detection
+			elapsedTime = 0;
+			gettimeofday(&t2, NULL);
+			elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+			elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;
+	//		ROS_INFO("time aruco	%f",elapsedTime);
+			while(elapsedTime<artDelay){ //10
+				gettimeofday(&t2, NULL);
+				elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+				elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
+			}
 			comparedpixelpos_pub_.publish(comparedpixelpos);
 //			ROS_INFO("INITIALIZE");
 			roi = cv::Rect2d(targetpixelAruco.x - roiSize/2.0, targetpixelAruco.y-roiSize/2.0, roiSize, roiSize);//&cv::Rect2d(0,0,frWidth-1,frHeight-1);
@@ -174,6 +190,16 @@ public:
 			comparedpixelpos.y = targetpixelAruco.y;
 			comparedpixelpos.theta = targetpixelAruco.theta;
 			// publish data from aruco detection
+			elapsedTime = 0;
+			gettimeofday(&t2, NULL);
+			elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+			elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;
+	//		ROS_INFO("time aruco	%f",elapsedTime);
+			while(elapsedTime<artDelay){ //10
+				gettimeofday(&t2, NULL);
+				elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+				elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
+			}
 			comparedpixelpos_pub_.publish(comparedpixelpos);	
 		}
 		else if(trackerdetectflag){
@@ -181,12 +207,35 @@ public:
 			comparedpixelpos.y = targetpixelTracker.y;
 			comparedpixelpos.theta = -10;
 			// publish data from tracker 
+			elapsedTime = 0;
+			gettimeofday(&t2, NULL);
+			elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+			elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;
+	//		ROS_INFO("time aruco	%f",elapsedTime);
+			while(elapsedTime<artDelay){ //10
+				gettimeofday(&t2, NULL);
+				elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+				elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
+			}
 			comparedpixelpos_pub_.publish(comparedpixelpos);
 		}
 		else{
 			comparedpixelpos.x = -1;
 			comparedpixelpos.y = -1;
 			comparedpixelpos.theta = -10;
+			// Delay of 16ms!!!! artificial
+	//		gettimeofday(&t1,NULL);
+			elapsedTime = 0;
+			gettimeofday(&t2, NULL);
+			elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+			elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;
+	//		ROS_INFO("time aruco	%f",elapsedTime);
+			while(elapsedTime<artDelay){ //10
+				gettimeofday(&t2, NULL);
+				elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+				elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
+			}
+
 			comparedpixelpos_pub_.publish(comparedpixelpos);
 		}
 		if(arucoNotDetectCounter>30){
@@ -195,19 +244,7 @@ public:
 			arucoNotDetectCounter = 0;
 		}
 
-		// Delay of 16ms!!!! artificial
-//		gettimeofday(&t1,NULL);
-		elapsedTime = 0;
-		gettimeofday(&t2, NULL);
-		elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
-		elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;
-//		ROS_INFO("time aruco	%f",elapsedTime);
-		while(elapsedTime<10){
-			gettimeofday(&t2, NULL);
-			elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
-			elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
-		} 
-//		ROS_INFO("time:	 %f", elapsedTime);
+//		ROS_INFO("KCF time:	 %f", elapsedTime);
 
 	}
 

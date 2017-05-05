@@ -80,11 +80,12 @@ int main(int argc, char** argv)
 //	std::string winName = "Preview";
 //	cv::namedWindow(winName, cv::WINDOW_KEEPRATIO);
 
-	cap.set(cv::CAP_PROP_FPS,fps);
+	cap.set(cv::CAP_PROP_FPS,fps);//fps);
 	cap.set(cv::CAP_PROP_FRAME_HEIGHT,frHeight);
 	cap.set(cv::CAP_PROP_FRAME_WIDTH,frWidth);
 
 	bool secondframecounter = false;
+	int fourthframecounter = 1;
 	// Loop
 	while (nh.ok()) {
 		//gettimeofday(&t1, NULL);
@@ -93,6 +94,7 @@ int main(int argc, char** argv)
 		if(secondframecounter){
 		grabbed.data = true;
 		grabbed_pub.publish(grabbed);
+//		ROS_INFO("		grabbed");
 		}
 		//gettimeofday(&t2, NULL);
 		//elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
@@ -109,6 +111,7 @@ int main(int argc, char** argv)
 //ROS_INFO("publish:");
 				pub.publish(msg);
 			}
+//		ROS_INFO("frame sent");
 		}
 		ros::spinOnce();
 		if(key) {

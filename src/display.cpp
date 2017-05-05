@@ -48,8 +48,8 @@ public:
 	ImageShow() : it_(nh_) {
 		image_sub_ = it_.subscribe("/camera/image_raw",1,
 			&ImageShow::imageCb, this);
-//		pixelpos_sub_ = nh_.subscribe("pixelpos",1, &ImageShow::pixelposCb,this);
-		comparedpixelpos_sub_ = nh_.subscribe("comparedpixelpos",1, &ImageShow::comparedpixelposCb,this);
+		pixelpos_sub_ = nh_.subscribe("pixelpos",1, &ImageShow::pixelposCb,this);
+//		comparedpixelpos_sub_ = nh_.subscribe("comparedpixelpos",1, &ImageShow::comparedpixelposCb,this);
 		focus_and_zoom_sub_ = nh_.subscribe("fandzmsg",1,&ImageShow::displayDetCb, this);
 		waitkey_pub_ = nh_.advertise<std_msgs::Int8>("waitkey",1);
 		shutdownkey_pub_ = nh_.advertise<std_msgs::Bool>("shutdownkey",1);
@@ -86,7 +86,7 @@ public:
 			return;
 		}
 		cv_ptr->image.copyTo(frame);
-		if(!cv_ptr->image.empty()){
+/*		if(!cv_ptr->image.empty()){
 			cv::imshow(winNameraw,cv_ptr->image);
 			waitkey.data = cv::waitKey(1);
 			if(waitkey.data!=-1){
@@ -99,12 +99,14 @@ public:
 				}
 				else waitkey_pub_.publish(waitkey);
 			}
-		}
+		}*/
 	}
 	void pixelposCb(const geometry_msgs::Pose2D::ConstPtr& pixelpos){
 		pixelX = pixelpos->x;
 		pixelY = pixelpos->y;
+		theta = pixelpos->theta;
 	}
+
 	void comparedpixelposCb(const geometry_msgs::Pose2D::ConstPtr& comparedpixelpos){
 		pixelX = comparedpixelpos->x;
 		pixelY = comparedpixelpos->y;
@@ -120,11 +122,21 @@ public:
 			cv::rectangle(frame, cv::Rect2d(pixelX-tsize/2.0,pixelY-tsize/2.0, tsize, tsize)&cv::Rect2d(0,0,frWidth-1,frHeight-1),
 				DispColor,2,8,0);
 			if(theta>-7){
-				cv::arrowedLine(frame, cv::Point2f(pixelX,pixelY), cv::Point2f(pixelX + std::cos(theta)*10,pixelY - std::sin(theta)*10), DispColor, 2);
+				cv::arrowedLine(frame, cv::Point2f(pixelX,pixelY), cv::Point2f(pixelX + std::cos(theta)*30,pixelY - std::sin(theta)*30), DispColor, 2);
 				}
 			}
 			cv::imshow(winNamedet,frame);
-			cv::waitKey(1);
+			waitkey.data = cv::waitKey(1);
+			if(waitkey.data!=-1){
+				if(waitkey.data == 27){
+					shutdownkey.data = true;
+					shutdownkey_pub_.publish(shutdownkey);
+					ROS_INFO("Shutdown\n");
+					ros::Duration(0.06).sleep();
+					ros::shutdown();
+				}
+				else waitkey_pub_.publish(waitkey);
+			}
 		}
 	}
 	void setframeprops(int width, int height){
