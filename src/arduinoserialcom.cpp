@@ -215,12 +215,12 @@ public:
 		}
 		else if((loopcounter%(delay+1))>delay-1){
 			delay = smalldelay;
-			if(sharpness>sharpnessmax){
+			if((sharpness>sharpnessmax)&detectflag){
 				sharpnessmax = sharpness;
 				scanfocmax = focus;
+				detected_during_scan = true;
 			}
 			focus += focusscanstep;
-			if(detectflag) detected_during_scan = true;
 			if(focus>focmax){
 				if(detected_during_scan){
 					focus = scanfocmax;
@@ -228,6 +228,7 @@ public:
 					direction = FAR;
 				}
 				firstscan = true;
+				loopcounter = 0;
 			}
 /*			if(detectflag){
 				scanfocus = false;
@@ -245,16 +246,13 @@ public:
 	}
 
 	void controlFocus(){
-		fsharpness += sharpness;
-		if((loopcounter%(smalldelay+1))>smalldelay-1){
+		if((loopcounter%delay == 0) && olddetectflag){
+			fsharpness = sharpness + sharpnessold;
 			if(fsharpness<fsharpnessold){
 				direction ^= true;
 			}
 			if(direction == NEAR) focus -= focusstep;
 			else focus += focusstep;
-			if(fsharpness<1080.0){
-				scanfocus = true;
-			}
 			focus = min(focmax, focus);
 			focus = max(focmin, focus);
 			fsharpnessold = fsharpness;
@@ -263,18 +261,19 @@ public:
 			focuslevel.data = focus;
 			focus_level_pub_.publish(focuslevel);
 		}
+		if(loopcounter>23) loopcounter = 0;
 	}
 
 	void controlZoom(){
 		oldzoom = zoom;
 		if(!detectflag){
-			if(notdetectcounter > 29){
+			if(notdetectcounter > 20){
 				zoom = zoommax;
 				sendZoom();
 				loopcounter = 0;
 			}
 		}
-		else if (loopcounter > 15){
+		else if (loopcounter > 20){
 			if(tsizefiltered>tsizeUpperThrshld){
 				zoom += zoomstep;
 				zoom = min(zoom, zoommax);
@@ -285,7 +284,6 @@ public:
 				zoom = max(zoom,zoommin);
 				sendZoom();
 			}
-			loopcounter = 0;
 		}
 		if(zoom != oldzoom){
 			zoomlevel.data = zoom;
@@ -313,15 +311,18 @@ public:
 			notdetectcounter++;
 		}
 		else notdetectcounter = 0;
-		if(notdetectcounter>30){ //>10
+		if(notdetectcounter>15){ //>10
 			scanfocus = true;
 			notdetectcounter = 0;
+			controlZoom();
 		}
 		if(scanfocus){
 			scanFocus();
 		}
-		else controlFocus();
-		controlZoom();
+		else if(detectflag){
+			controlFocus();
+			controlZoom();
+		}
 	}
 
 	void shutdownCb(const std_msgs::Bool::ConstPtr& shutdownkey){
@@ -341,4 +342,3 @@ int main( int argc, char** argv ) {
 
 	return(0);
 }
-
