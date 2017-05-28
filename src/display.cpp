@@ -67,7 +67,7 @@ public:
 		else ROS_INFO("param height not found");
 
 
-		cv::namedWindow(winNameraw,cv::WINDOW_KEEPRATIO);
+//		cv::namedWindow(winNameraw,cv::WINDOW_KEEPRATIO);
 		cv::namedWindow(winNamedet,cv::WINDOW_KEEPRATIO);
 	}
 
@@ -122,7 +122,7 @@ public:
 			cv::rectangle(frame, cv::Rect2d(pixelX-tsize/2.0,pixelY-tsize/2.0, tsize, tsize)&cv::Rect2d(0,0,frWidth-1,frHeight-1),
 				DispColor,2,8,0);
 			if(theta>-7){
-				cv::arrowedLine(frame, cv::Point2f(pixelX,pixelY), cv::Point2f(pixelX + std::cos(theta)*30,pixelY - std::sin(theta)*30), DispColor, 2);
+				cv::arrowedLine(frame, cv::Point2f(pixelX,pixelY), cv::Point2f(pixelX + std::cos(theta)*30,pixelY - std::sin(theta)*30), cv::Scalar(255,0,0), 3);
 				}
 			}
 			cv::imshow(winNamedet,frame);

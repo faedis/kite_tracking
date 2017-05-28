@@ -51,8 +51,8 @@ private:
 	int focmax = 800;
 	int focusstep = 3;
 	int focusscanstep = 10;
-	int delay = 6;
-	int smalldelay = 6;
+	int delay = 3;
+	int smalldelay = 3;
 	int largedelay = 2*smalldelay;
 	bool
 	NEAR = false,
@@ -73,7 +73,7 @@ private:
 	// Zoom variables
 	int zoomcounter = 0, zoomdelay = 6;
 	int  zoom = 171, zoommax = 171, zoommin = 0, zoomstep = 3, oldzoom = zoom;
-	float tsize, tsizefiltered; // target size
+	float tsize = 100, tsizefiltered = 100; // target size
 	int tsizeUpperThrshld = 30, tsizeLowerThrshld = 25;
 	int loopcounter = 0;
 	std_msgs::Int16 zoomlevel;
@@ -174,7 +174,7 @@ public:
 		write(serial_fd,cmde.c_str(),cmde.length());
 		sleep(1);
 		ostringstream cmd_buffv;
-		cmd_buffv << ">v,"<<fps<<","<< 0<<","<< 3 <<","<<0<<","<<0<<"<";
+		cmd_buffv << ">v,"<<60<<","<< 0<<","<< 3 <<","<<0<<","<<0<<"<";
 		string cmdv = cmd_buffv.str();
 		write(serial_fd,cmdv.c_str(),cmdv.length());
 
@@ -204,6 +204,7 @@ public:
 	void scanFocus(){
 		if(firstscan){
 //	ROS_INFO("FIRSTSCAN");
+			if((loopcounter%delay == 0)){//(delay+1))>delay-1){
 				detected_during_scan = false;
 				sharpnessmax = 0;
 				delay = largedelay;
@@ -212,15 +213,16 @@ public:
 				firstscan = false;
 				focuslevel.data = focus;
 				focus_level_pub_.publish(focuslevel);
+			}
 		}
-		else if((loopcounter%(delay+1))>delay-1){
+		else if((loopcounter%delay == 0)){//(delay+1))>delay-1){ 
 			delay = smalldelay;
-			if(sharpness>sharpnessmax){
+			if((sharpness>sharpnessmax)&detectflag){
 				sharpnessmax = sharpness;
 				scanfocmax = focus;
+				detected_during_scan = true;
 			}
 			focus += focusscanstep;
-			if(detectflag) detected_during_scan = true;
 			if(focus>focmax){
 				if(detected_during_scan){
 					focus = scanfocmax;
@@ -228,6 +230,7 @@ public:
 					direction = FAR;
 				}
 				firstscan = true;
+				loopcounter = 0;
 			}
 /*			if(detectflag){
 				scanfocus = false;
@@ -245,36 +248,36 @@ public:
 	}
 
 	void controlFocus(){
-		fsharpness += sharpness;
-		if((loopcounter%(smalldelay+1))>smalldelay-1){
+		if((loopcounter%delay == 0) && olddetectflag){
+			fsharpness = sharpness + sharpnessold;
 			if(fsharpness<fsharpnessold){
 				direction ^= true;
 			}
 			if(direction == NEAR) focus -= focusstep;
 			else focus += focusstep;
-			if(fsharpness<1080.0){
-				scanfocus = true;
-			}
 			focus = min(focmax, focus);
 			focus = max(focmin, focus);
 			fsharpnessold = fsharpness;
+//		ROS_INFO("%d	%f	%f	%f",focus,sharpness,fsharpness,tsizefiltered);
 			fsharpness = 0;
 			sendFocus();
 			focuslevel.data = focus;
 			focus_level_pub_.publish(focuslevel);
 		}
+		if(loopcounter>23) loopcounter = 0;
 	}
 
 	void controlZoom(){
 		oldzoom = zoom;
 		if(!detectflag){
-			if(notdetectcounter > 29){
+			if(notdetectcounter > 32){
 				zoom = zoommax;
 				sendZoom();
 				loopcounter = 0;
+				notdetectcounter = 0;
 			}
 		}
-		else if (loopcounter > 15){
+		else if (loopcounter%8 == 6){ //22
 			if(tsizefiltered>tsizeUpperThrshld){
 				zoom += zoomstep;
 				zoom = min(zoom, zoommax);
@@ -285,7 +288,6 @@ public:
 				zoom = max(zoom,zoommin);
 				sendZoom();
 			}
-			loopcounter = 0;
 		}
 		if(zoom != oldzoom){
 			zoomlevel.data = zoom;
@@ -313,15 +315,22 @@ public:
 			notdetectcounter++;
 		}
 		else notdetectcounter = 0;
-		if(notdetectcounter>30){ //>10
+		if(notdetectcounter>15 && scanfocus == false){ //>10
 			scanfocus = true;
-			notdetectcounter = 0;
+			controlZoom();
+			loopcounter = 0;
+		}
+		else{
+			controlZoom();
 		}
 		if(scanfocus){
 			scanFocus();
 		}
-		else controlFocus();
-		controlZoom();
+		else if(detectflag){
+			controlFocus();
+		}
+
+//		cout << tsize << "," << tsizefiltered << "\n";
 	}
 
 	void shutdownCb(const std_msgs::Bool::ConstPtr& shutdownkey){
@@ -341,4 +350,3 @@ int main( int argc, char** argv ) {
 
 	return(0);
 }
-

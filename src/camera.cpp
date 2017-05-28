@@ -23,6 +23,7 @@ int main(int argc, char** argv)
 	int frHeight = 360; //576;
 	int frWidth = 640; //1024;
 	int cameraNumber = 0;
+	int fourthframecounter = 0;
 /*
 	if(argc == 3){
 		frWidth = atoi(argv[1]);
@@ -58,11 +59,11 @@ int main(int argc, char** argv)
 		ROS_INFO("Read parameter frHeight, success: %d	%d",frHeight, success);
 	}
 	else ROS_INFO("param height not found");
-	if(nh.hasParam("camera/fps")){
+/*	if(nh.hasParam("camera/fps")){
 		bool success = nh.getParam("camera/fps",fps);
 		ROS_INFO("Read parameter fps, success: %d	%d",fps, success);
 	}
-	else ROS_INFO("param fps not found");
+	else ROS_INFO("param fps not found");*/
 	if(nh.hasParam("camera/cameraNumber")){
 		bool success = nh.getParam("camera/cameraNumber",cameraNumber);
 		ROS_INFO("Read parameter cameraNumber, success: %d	%d",cameraNumber, success);
@@ -85,13 +86,12 @@ int main(int argc, char** argv)
 	cap.set(cv::CAP_PROP_FRAME_WIDTH,frWidth);
 
 	bool secondframecounter = false;
-	int fourthframecounter = 1;
 	// Loop
 	while (nh.ok()) {
 		//gettimeofday(&t1, NULL);
 		cap.grab();
 		secondframecounter ^=true;
-		if(secondframecounter){
+		if(fourthframecounter>3){//secondframecounter){
 		grabbed.data = true;
 		grabbed_pub.publish(grabbed);
 //		ROS_INFO("		grabbed");
@@ -100,19 +100,22 @@ int main(int argc, char** argv)
 		//elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
 		//elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
 		//ROS_INFO("time grab: %f", elapsedTime);
-		cap.retrieve(frame);
+//		cap.retrieve(frame);
 		//gettimeofday(&t2, NULL);
 		//elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
 		//elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
 		//ROS_INFO("time retrieved: %f", elapsedTime);
-		if(secondframecounter){
+		if(fourthframecounter>3){//secondframecounter){
+			cap.retrieve(frame);
 			if(!frame.empty()){
 				msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", frame).toImageMsg();
 //ROS_INFO("publish:");
 				pub.publish(msg);
 			}
+			fourthframecounter = 0;
 //		ROS_INFO("frame sent");
 		}
+		fourthframecounter++;
 		ros::spinOnce();
 		if(key) {
 			ROS_INFO("Shutdown\n");
