@@ -1,7 +1,13 @@
-/*
-receives frame and displayes them with and without target rectangle
-window without target rectangle is used to interrupt with the waitkey
-*/
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\\
+// Purpose:
+// 1) Display the frame and the detected object
+// 2) Interface between the user and the control
+//
+//
+// Author: Guetg Fadri, guetgf@student.ethz.ch
+// 28.05.2017
+//
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\\
 #include <ros/ros.h>
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
@@ -18,12 +24,15 @@ window without target rectangle is used to interrupt with the waitkey
 #define _USE_MATH_DEFINES
 #include <math.h>
 
-std::string winNameraw = "Preview Frame";
+// CV Window:
 std::string winNamedet = "Preview Detection";
 
-
+// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+//	Display Image Class
+// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class ImageShow{
 	ros::NodeHandle nh_;
+	// The ROS subscribers and publishers:
 	image_transport::ImageTransport it_;
 	image_transport::Subscriber image_sub_;
 	ros::Subscriber pixelpos_sub_;
@@ -34,27 +43,31 @@ class ImageShow{
 	ros::Publisher shutdownkey_pub_;
 private:
 cv::Mat frame;
-double tside, tsize;
-double theta = 0;
-double pixelX, pixelY;
+double tsize;				// size of the marker
+double theta = 0;			// heading of the marker
+double pixelX, pixelY;		// Center of the marker in pixel
+// Messages:
 std_msgs::Int8 waitkey;
 std_msgs::Bool shutdownkey;
-int frWidth = 640;
-int frHeight = 360;
-cv::Scalar DispColor = cv::Scalar(0,0,0);
+//
+int frWidth = 640;			// frame width in pixel
+int frHeight = 360;			// frame hight int pixel
+// Different colors for displaying:
 cv::Scalar ArucoCol = cv::Scalar(0,0,255);
-cv::Scalar TrackCol = cv::Scalar(0,255,0);
+cv::Scalar AngleCol = cv::Scalar(255,0,0);
 public:
+	// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+	//	Constructor
+	// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 	ImageShow() : it_(nh_) {
 		image_sub_ = it_.subscribe("/camera/image_raw",1,
 			&ImageShow::imageCb, this);
 		pixelpos_sub_ = nh_.subscribe("pixelpos",1, &ImageShow::pixelposCb,this);
-//		comparedpixelpos_sub_ = nh_.subscribe("comparedpixelpos",1, &ImageShow::comparedpixelposCb,this);
 		focus_and_zoom_sub_ = nh_.subscribe("fandzmsg",1,&ImageShow::displayDetCb, this);
 		waitkey_pub_ = nh_.advertise<std_msgs::Int8>("waitkey",1);
 		shutdownkey_pub_ = nh_.advertise<std_msgs::Bool>("shutdownkey",1);
 
-
+		// Read parameters that are defined in launch file
 		if(nh_.hasParam("camera/frWidth")){
 			bool success = nh_.getParam("camera/frWidth",frWidth);
 			ROS_INFO("Read display parameter frWidth, success: %d	%d",frWidth, success);
@@ -67,15 +80,17 @@ public:
 		else ROS_INFO("param height not found");
 
 
-//		cv::namedWindow(winNameraw,cv::WINDOW_KEEPRATIO);
 		cv::namedWindow(winNamedet,cv::WINDOW_KEEPRATIO);
 	}
-
+	//	END Constructor
+	// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+	
+	// Destructor:
 	~ImageShow(){
-		cv::destroyWindow(winNameraw);
 		cv::destroyWindow(winNamedet);
 	}
-
+	
+	// Receive the image:
 	void imageCb(const sensor_msgs::ImageConstPtr& msg){
 		cv_bridge::CvImageConstPtr cv_ptr;
 		try{
@@ -86,47 +101,26 @@ public:
 			return;
 		}
 		cv_ptr->image.copyTo(frame);
-/*		if(!cv_ptr->image.empty()){
-			cv::imshow(winNameraw,cv_ptr->image);
-			waitkey.data = cv::waitKey(1);
-			if(waitkey.data!=-1){
-				if(waitkey.data == 27){
-					shutdownkey.data = true;
-					shutdownkey_pub_.publish(shutdownkey);
-					ROS_INFO("Shutdown\n");
-					ros::Duration(0.06).sleep();
-					ros::shutdown();
-				}
-				else waitkey_pub_.publish(waitkey);
-			}
-		}*/
 	}
+	// Receive the pixel position and heading angle of the marker
 	void pixelposCb(const geometry_msgs::Pose2D::ConstPtr& pixelpos){
 		pixelX = pixelpos->x;
 		pixelY = pixelpos->y;
 		theta = pixelpos->theta;
 	}
-
-	void comparedpixelposCb(const geometry_msgs::Pose2D::ConstPtr& comparedpixelpos){
-		pixelX = comparedpixelpos->x;
-		pixelY = comparedpixelpos->y;
-		theta = comparedpixelpos->theta;
-	}
+	// Display the frame with the detected marker and heading angle
 	void displayDetCb(const std_msgs::Float32MultiArray::ConstPtr& fandzmsg){
 		if(!frame.empty()){
-			if(theta<-7) DispColor = TrackCol;
-			else DispColor = ArucoCol;
-
 			tsize = fandzmsg->data[2];
-			if(pixelX>=0){
+			if(pixelX>=0){ // if detected...
 			cv::rectangle(frame, cv::Rect2d(pixelX-tsize/2.0,pixelY-tsize/2.0, tsize, tsize)&cv::Rect2d(0,0,frWidth-1,frHeight-1),
-				DispColor,2,8,0);
-			if(theta>-7){
-				cv::arrowedLine(frame, cv::Point2f(pixelX,pixelY), cv::Point2f(pixelX + std::cos(theta)*30,pixelY - std::sin(theta)*30), cv::Scalar(255,0,0), 3);
+				ArucoCol,2,8,0);
+			if(theta>-7){ // if detected ... 
+				cv::arrowedLine(frame, cv::Point2f(pixelX,pixelY), cv::Point2f(pixelX + std::cos(theta)*30,pixelY - std::sin(theta)*30), AngleCol, 3);
 				}
 			}
-			cv::imshow(winNamedet,frame);
-			waitkey.data = cv::waitKey(1);
+			cv::imshow(winNamedet,frame);	// dislpay frame
+			waitkey.data = cv::waitKey(1);	// key given by the user (http://docs.opencv.org/2.4/modules/highgui/doc/user_interface.html?highlight=waitkey for more info)
 			if(waitkey.data!=-1){
 				if(waitkey.data == 27){
 					shutdownkey.data = true;
@@ -139,27 +133,16 @@ public:
 			}
 		}
 	}
-	void setframeprops(int width, int height){
-		frWidth = width;
-		frHeight = height;
-	}
 };
+//	END Display Image Class
+// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 int main(int argc, char **argv)
 {
 	ros::init(argc, argv, "display_node");
+	// construct object of Display Image Class:	
 	ImageShow is;
-/*	if(argc == 3){
-		int frWidth = atoi(argv[1]);
-		int frHeight = atoi(argv[2]);
-		is.setframeprops(frWidth,frHeight);
-	std::cout << "\nframe width 	" << frWidth
-	<< "\nframe height	" << frHeight << "\n"; 
-	}
-	else{
-		std::cout<< "Default frame property values used [640x360].\n You can pass the arguments using: [frame width]  [frame height] in command line\n";
-	}
-*/
+	// Constantly call the callbacks:
 	ros::spin();
 	return 0;
 }

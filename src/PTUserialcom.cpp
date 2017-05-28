@@ -1,7 +1,15 @@
-/*
-Serial connection to ptu
-querries ptu position and sends velocity commands
-*/
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\\
+// Purpose:
+// 1) Start up the PTU
+// 2) Query the position from the PTU and publish them
+// 3) Send velocity commands to the PTU
+//
+//
+// Author: Guetg Fadri, guetgf@student.ethz.ch
+// 28.05.2017
+//
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\\
+
 
 #include <iostream>
 #include <fstream>
@@ -20,21 +28,20 @@ extern "C" {
 #include <stdio.h>
 #include <ctype.h>
 #include <stdlib.h>
+// CPI:
 #include "cpiver.h"
 #include "ptu.h"
 }
 
 using namespace std;
 
-typedef unsigned long long nk_time;
 
-static nk_time nk_timestamp(){ // returns an unsigned long long with the milliseconds passed since 1970
-    return static_cast<nk_time> (std::chrono::duration_cast<std::chrono::microseconds> (std::chrono::high_resolution_clock::now().time_since_epoch()).count());
-}
+portstream_fd COMstream;	// PTU handle
 
 
-portstream_fd COMstream;			// creat PTU handle
-struct timeval t10, t11, t13;
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+// PTU Subscribe and Publish Class
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class PTUSubAndPub{
 
 private:
@@ -59,83 +66,37 @@ private:
 	double elapsedRos = 0;
 public:
 	PTUSubAndPub(){
-		// publisher
+		// publisher:
 		ptupos_pub_ = n_.advertise<geometry_msgs::Pose2D>("ptupos",1);
-		// subscriber
+		// subscriber:
 		ptucmd_sub_ = n_.subscribe("ptucmd",1,&PTUSubAndPub::ptucmdCb,this);
 		waitkey_sub_ = n_.subscribe("waitkey",1,&PTUSubAndPub::waitkeyCb,this);
 		shutdownkey_sub_ = n_.subscribe("shutdownkey",1,&PTUSubAndPub::shutdownCb,this);
 		grabbed_sub_ = n_.subscribe("grabbed",1, &PTUSubAndPub::grabbedCb,this);
 	}
-	// set PTU speed
+	// command the PTU speed:
 	void ptucmdCb(const geometry_msgs::Pose2D::ConstPtr& ptucmd){
 		panSpeed = ptucmd->x;
 		tiltSpeed = ptucmd->y;
-//		gettimeofday(&t1, NULL);
-//		set_desired(PAN, SPEED, &panSpeed, ABSOLUTE);
-//		ROS_INFO("ptu cmd");
-//		nk1 = nk_timestamp();
 		char answer = ptu_set_desired_velocities(panSpeed, tiltSpeed);
 		if(answer!=0){
 			ROS_INFO("error on vel sending:	%c", answer);
 		}
-//		ROS_INFO("cmd sent");
-//		ROS_INFO("velocity cmd:	%d", panSpeed);
-//		gettimeofday(&t2, NULL);
-//		nk2 = nk_timestamp();
-//		elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
-//		elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
-//		ROS_INFO("cmd sent %f	%d	%d	%d",elapsedTime, nk2-nk1, panSpeed, tiltSpeed);
 	}
-	// get PTU position and publish
+	// get PTU position and publish:
 	void grabbedCb(const std_msgs::Bool::ConstPtr& grabbed){
-		//ROS_INFO("start query");
-/*		gettimeofday(&t1, NULL);
-		elapsedTime = 0;
-		while(elapsedTime<5){
-			gettimeofday(&t2, NULL);
-			elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
-			elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
-		}
-*/
-/*
-		gettimeofday(&t1, NULL);
-		while(elapsedTime<7.5){
-			gettimeofday(&t2,NULL);
-			elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
-			elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
-		}
-*/
-//		ROS_INFO("		query pos");
-//		gettimeofday(&t1, NULL);
-//		s_ros = ros::Time::now();
-//		ROS_INFO("		pos query");
-//		nk1 = nk_timestamp();
 		char answer = get_current_positions(pPtr,tPtr);
 		if(answer==0){
 		ROS_INFO("error on pos reading:	%c", answer);
 		}
-//		gettimeofday(&t2,NULL);
-//		elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
-//		elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
-//		nk2 = nk_timestamp();
-//		ROS_INFO("query sent %f	%d",elapsedTime, nk2-nk1);
 
 		ptupos.x = *pPtr;
 		ptupos.y = *tPtr;
 		ptupos.theta = 0;
 		ptupos_pub_.publish(ptupos);
 
-		//e_ros = ros::Time::now();
-
-//		elapsedRos = (e_ros-s_ros).toNSec()/1000000.0;
-
-//		ROS_INFO("		pos querried");
-
-//		ROS_INFO("pos query:	%d", *pPtr);
-		//ROS_INFO("end query ");
 	}
-	// rehome or shutdown
+	// Rehome the PTU:
 	void waitkeyCb(const std_msgs::Int8::ConstPtr& waitkey){
 		int key = waitkey->data;
 		if(key == 114){
@@ -144,6 +105,7 @@ public:
 			await_completion();
 		}
 	}
+	// Shutdown the node:
 	void shutdownCb(const std_msgs::Bool::ConstPtr& shutdownkey){
 		ptu_set_desired_velocities(rehomespeed, rehomespeed);
 		set_desired_abs_positions(&panZero,&tiltZero);
@@ -152,18 +114,24 @@ public:
 		ros::shutdown();
 	}
 };
+// END PTU Subscribe and publish Class
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+// Main function
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 int main( int argc, char** argv ) {
-	// Set up PTU +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+	// Setting up the PTU
+	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+	// Set up serial connection to the PTU: 
 	int filenumber = 0;
 	char COMportName[256] = "/dev/ttyUSB0";
 	int BaudRate = 19200;
-	// Initialize PTU and set mode
-
-	set_baud_rate(BaudRate);			// set baud rate
+	set_baud_rate(BaudRate);					// set baud rate
 	COMstream = open_host_port(COMportName);	// open serial communication
-	if (COMstream == PORT_NOT_OPENED)		// check connection is open, else abord
+	if (COMstream == PORT_NOT_OPENED)			// check connection is open, else abord
 	{
 		printf("\nSerial Port setup error.\n");
 		return -1;
@@ -171,6 +139,7 @@ int main( int argc, char** argv ) {
 	else{
 		cout << "Serial port to PTU opened\n\n";
 	}
+	// When powering up, the PTU has to be calibrated
 	cout << "Do you want to reset PTU (suggested when powered up again)\nThen press 1, else any key\n";
 	int firstUseInt = 0;
 	bool firstUse = false;
@@ -184,10 +153,8 @@ int main( int argc, char** argv ) {
 		firstUse = false;
 		cout << "Reset disabled\n";
 	}
-	//Serial can be used for setting user position limits,
-	//move power and step mode (e.g. wth = tilt half step mode)
-	//wta/wpa is automatic step mode and leads to resolution of
-	// 46.2857 rsp 11.5714 arc sec pp, tmr is tilt regular move power
+	// SerialStringOut allows us set more parameter than with the CPI:
+	// Check the "Command Reference Manual" for more detail
 	if (firstUse) {
 		if (SerialStringOut(COMstream, (unsigned char *)"TMH PMH WTH WPQ ") != TRUE) {
 			cout << "1st Serial command not sent to PTU \n";
@@ -195,20 +162,14 @@ int main( int argc, char** argv ) {
 		}
 		cout << "Wait until PTU has stopped and then enter a key! \n";
 		int dummyvar = 0;
-		cin>>dummyvar;		// tilt reg move power, tilt min pos, t max pos, p m pos,
-		// p x pos, user limits enabled, disable reset on restart,
-		//t acc, p acc, p upper speed limit, t u s l
+		cin>>dummyvar;
 		reset_PTU_parser(2000);
-		if (SerialStringOut(COMstream, (unsigned char *)"RD TML PML A TNU-10 LU TXU2250 LU A PNU-2000 LU PXU2000 LU A PU3500 TU3500 TA2000 PA2000 ") != TRUE) { //TA50000 PA25000
+		if (SerialStringOut(COMstream, (unsigned char *)"RD TML PML A TNU-10 LU TXU2250 LU A PNU-2000 LU PXU2000 LU A PU3500 TU3500 TA2000 PA2000 ") != TRUE) { 
 			cout << "2nd Serial command not sent to PTU \n";
 		}
 
-		reset_PTU_parser(2000); // needed for changing between direct serial comm and cpi commands
-								// set pure velocity mode
-/*		if (set_mode(POSITION_LIMITS_MODE,ON_MODE) == PTU_OK){
-			cout << "Position limits enabled \n";
-		}
-*/
+		reset_PTU_parser(2000);
+
 		if (set_mode(SPEED_CONTROL_MODE, PTU_PURE_VELOCITY_SPEED_CONTROL_MODE) == PTU_OK) {
 			cout << "Speed mode set to pure velocity \n";
 		}
@@ -227,7 +188,6 @@ int main( int argc, char** argv ) {
 		maxPos = 0;
 		maxPos = (short)get_current(TILT, MINIMUM_POSITION);
 		cout << "Tilt minimum Position " << maxPos << "\n";
-		//  base speed:
 		
 		signed short int val = 58; 
 		if (set_desired(PAN, BASE, (PTU_PARM_PTR *)&val, ABSOLUTE) != PTU_OK) {
@@ -239,18 +199,15 @@ int main( int argc, char** argv ) {
 		}
 		cout << "Base speed pan: " << (short)get_current(PAN, BASE) << "\n";
 		cout << "Base speed tilt: " << (short)get_current(TILT, BASE) << "\n";
-		////////
+
 		reset_PTU_parser(2000);
+
 		if (SerialStringOut(COMstream, (unsigned char *)"RD TML PML A TNU-10 LU TXU2250 LU A PNU-2000 LU PXU2000 LU A PU3500 TU3500 TA2000 PA2000 ") != TRUE) { //TA50000 PA25000
 			cout << "2nd Serial command not sent to PTU \n";
 		}
 
-		reset_PTU_parser(2000); // needed for changing between direct serial comm and cpi commands
-								// set pure velocity mode
-/*		if (set_mode(POSITION_LIMITS_MODE,ON_MODE) == PTU_OK){
-			cout << "Position limits enabled \n";
-		}
-*/
+		reset_PTU_parser(2000); 
+
 		if (set_mode(SPEED_CONTROL_MODE, PTU_PURE_VELOCITY_SPEED_CONTROL_MODE) == PTU_OK) {
 			cout << "Speed mode set to pure velocity \n";
 		}
@@ -269,7 +226,6 @@ int main( int argc, char** argv ) {
 		maxPos = 0;
 		maxPos = (short)get_current(TILT, MINIMUM_POSITION);
 		cout << "Tilt minimum Position " << maxPos << "\n";
-		//  base speed:
 		
 		 val = 58; 
 		if (set_desired(PAN, BASE, (PTU_PARM_PTR *)&val, ABSOLUTE) != PTU_OK) {
@@ -282,23 +238,16 @@ int main( int argc, char** argv ) {
 		cout << "Base speed pan: " << (short)get_current(PAN, BASE) << "\n";
 		cout << "Base speed tilt: " << (short)get_current(TILT, BASE) << "\n";
 	}
-
+	// END Setting up the PTU
+	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 	ros::init(argc, argv, "ptuserialcom_node");
+	// construct object of the PTU Subscribe and Publish Class:	
 	PTUSubAndPub ptusap;
+	// Constantly call the callbacks:
 	ros::spin();
-
-
-	// rehome PTU
-	//val = 1000;
-	//set_desired(PAN, SPEED, &val, ABSOLUTE);
-	//set_desired(TILT, SPEED, &val, ABSOLUTE);
-	//val = 0;
-	//set_desired(PAN, POSITION, &val, ABSOLUTE);
-	//val = 0;
-	//set_desired(TILT, POSITION, &val, ABSOLUTE);
-	//close_host_port(COMstream);				// close connection
-
 
 	return 0;
 }
+// END Main function
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

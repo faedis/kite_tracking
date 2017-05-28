@@ -1,3 +1,16 @@
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\\
+// Purpose:
+// 1) Detect Aruco marker
+// 2) Get the size of the marker
+// 3) Calculate the sharpness measure
+//
+//
+// Author: Guetg Fadri, guetgf@student.ethz.ch
+// 28.05.2017
+//
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\\
+
+
 #include <ros/ros.h>
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
@@ -15,16 +28,13 @@
 #include "opencv2/videoio.hpp"
 #include <vector>
 #include <iostream>
-/*
-Receives frame and processes it
-publishes target position and size
-*/
 
+// Time variables:
 struct timeval t1, t2;
 double elapsedTime;
 
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-// focus measure
+// Function for sharpness measure
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 float LaplaceVarFocus(cv::Mat inputFrame) {
 	if (inputFrame.empty()) {
@@ -43,62 +53,64 @@ float LaplaceVarFocus(cv::Mat inputFrame) {
 	cv::convertScaleAbs(lap, viz);
 	cv::Scalar mu, sigma;
 	cv::meanStdDev(lap, mu, sigma);
-	float focusMeasure = sigma.val[0] * sigma.val[0];
-	return focusMeasure;
+	float sharpnessMeasure = sigma.val[0] * sigma.val[0];
+	return sharpnessMeasure;
 }
+// END Function for sharpness measure
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+// Aruco Marker Detection Class
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class ArucoDet{
 	ros::NodeHandle nh_;
-	image_transport::ImageTransport it_;
-	image_transport::Subscriber image_sub_;
+	// The ROS subscribers and publishers:
+	image_transport::ImageTransport it_;		// for receiving the frame
+	image_transport::Subscriber image_sub_;		// for receiving the frame 
 	ros::Subscriber shutdownkey_sub_;
 	ros::Publisher pixelpos_pub_;
-	ros::Publisher targetsize_pub_;
-	ros::Publisher detect_pub_;
-	ros::Publisher focus_pub_;
 	ros::Publisher focus_and_zoom_pub_;
 private:
 int key = 0;
-cv::Mat grayFrame;
-cv::Point target;
-int frWidth = 640;
-int frHeight = 360;
-double artDelay = 14.0;
-// Messages
+cv::Mat grayFrame;	
+int frWidth = 640;		// frame width
+int frHeight = 360;		// frame height
+double sharpnessmeasure;	// sharpness measure
+double artDelay = 29.0; // artificial delay for timing the sending of the pixelposition
+// Messages:
 geometry_msgs::Pose2D pixelpos;
-//std_msgs::Bool detectmsg;
 std_msgs::Float32MultiArray fandzmsg;
-std::string winName = "ArucoDetection";
+
 bool detectflag = false;
-// Aruco Variables
-int dictNumber = 1;
+// Aruco Variables:
+// see http://docs.opencv.org/3.1.0/d5/dae/tutorial_aruco_detection.html for more information
+int dictNumber = 1; 
 int markerSize = 3;
 std::vector< int > markerIds;
 std::vector<std::vector<cv::Point2f> > markerCorners, rejectedCandidates;
-cv::Point2f v01, v03, v21, v23;
-float area1 = 100, area2 = 100;
-//cv::aruco::DetectorParameters parameters;
 cv::Ptr<cv::aruco::DetectorParameters> parameters = cv::aruco::DetectorParameters::create();
-
-//cv::aruco::Dictionary dictionary = cv::aruco::generateCustomDictionary(dictNumber,markerSize);
 cv::Ptr<cv::aruco::Dictionary> dictionary;
-cv::Point2f targetCenter;
-double theta = -10;
-int centerId = 0, rightId = 0, leftId = 0;
-double focusmeasure;
+//
+cv::Point2f v01, v03, v21, v23;	// points for calculating areas
+float area1 = 100, area2 = 100; // areas used for calculating size of marker
+cv::Point2f targetCenter;		// center of detected object
+double theta = -10;				// heading angle of the marker/kite
 
 public:
+	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+	// Constructor
+	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 	ArucoDet() : it_(nh_) {
+		// initialize subscriber and putlisher:
 		image_sub_ = it_.subscribe("/camera/image_raw",1,
 			&ArucoDet::imageCb, this);
 		shutdownkey_sub_ = nh_.subscribe("shutdownkey",1,&ArucoDet::shutdownCb,this);
-		// pixelpos_pub_ for ptu cotrol
 		pixelpos_pub_ = nh_.advertise<geometry_msgs::Pose2D>("pixelpos",1);
 		// focus_and_zoom_pub_ sends  detectflag, sharpness, target size
 		focus_and_zoom_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("fandzmsg",1);
-		fandzmsg.data.resize(4); // [0] = detected 0 or 1, [1] = sharpness, [2] = target size, [3] = center detected
+		fandzmsg.data.resize(3); // [0] = detected 0 or 1, [1] = sharpness, [2] = target size
 
-		// Read in parameters:
+		// Read in parameters that are defined in launch file:
 		if(nh_.hasParam("camera/frWidth")){
 			bool success = nh_.getParam("camera/frWidth",frWidth);
 			ROS_INFO("Read display parameter frWidth, success: %d	%d",frWidth, success);
@@ -124,7 +136,7 @@ public:
 			ROS_INFO("Read parameter artDelay, success: %f	%d",artDelay, success);
 		}
 		else ROS_INFO("param artDelay not found");
-
+		// assign aruco detection parameters (http://docs.opencv.org/3.1.0/d5/dae/tutorial_aruco_detection.html)
 		dictionary = cv::aruco::generateCustomDictionary(dictNumber,markerSize);
 		parameters->adaptiveThreshWinSizeMax = 23.0;	//default
 		parameters->adaptiveThreshWinSizeMin = 3.0;		// default	
@@ -132,20 +144,26 @@ public:
 		parameters->adaptiveThreshConstant = 13.0;		// default = 7
 		parameters->minMarkerPerimeterRate = 0.04;		// defualt = 0.03
 		parameters->maxMarkerPerimeterRate = 0.4;		// default = 4
-
 	}
+	// END Constructor
+	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
+	// Destructor:
 	~ArucoDet(){
-//		cv::destroyWindow(winName);
 	}
+	// Shut down the node:
 	void shutdownCb(const std_msgs::Bool::ConstPtr& shutdownkey){
 		ROS_INFO("Shutdown\n");
 		ros::shutdown();
 	}
 
+	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+	// Image callback
+	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 	void imageCb(const sensor_msgs::ImageConstPtr& msg){
-		//ROS_INFO("callback:");
+		// Start time measurement:
 		gettimeofday(&t1,NULL);
+		// Receive image:
 		cv_bridge::CvImageConstPtr cv_ptr;
 		try{
 			cv_ptr = cv_bridge::toCvShare(msg, sensor_msgs::image_encodings::BGR8);
@@ -154,30 +172,31 @@ public:
 			ROS_ERROR("cv_bridge exception: %s", e.what());
 			return;
 		}
-//ROS_INFO("received and read:");
-//		ROS_INFO("frame received");
+		// Convert image to grayscale:
 		cv::cvtColor(cv_ptr->image,grayFrame, CV_BGR2GRAY);
+		// Apply the marker detection:
 		cv::aruco::detectMarkers(grayFrame, dictionary, markerCorners, markerIds);
-//		ROS_INFO("time of detection: %f", elapsedTime);
 
-
+		// Read info of detected markers:
 		if(!markerCorners.empty()){
-//			ROS_INFO("			marker detected!");
-			if (markerIds[0] == 0){
+			if (markerIds[0] == 0){ // We used ID 0, otherwise adjust
 				detectflag = true;
+				// get center of marker:
 				targetCenter = (markerCorners[0][0] + markerCorners[0][1] + markerCorners[0][2] + markerCorners[0][3])/4.0;
 				pixelpos.x = targetCenter.x;
 				pixelpos.y = targetCenter.y;
-				// use only edges of marker which are in line with angle of attack.
-				// the other two edges are more prone to be bound because of the kite structure
+				// Calculate the heading angle:
+				// INFO: we use only edges of marker which are in line with angle of attack.
+				// the other two edges are more prone to be bended because of the kite structure
+				// if you want to use all edges, uncomment the two lines below and adjust other three lines below accordingly
 				//theta = std::atan2(-(markerCorners[0][0].x-markerCorners[0][1].x),(markerCorners[0][0].y-markerCorners[0][1].y));
 				//theta += std::atan2(-(markerCorners[0][3].x-markerCorners[0][2].x),(markerCorners[0][3].y-markerCorners[0][2].y));
 				theta = std::atan2(-(markerCorners[0][1].y-markerCorners[0][2].y),(markerCorners[0][1].x-markerCorners[0][2].x));
 				theta += std::atan2(-(markerCorners[0][0].y-markerCorners[0][3].y),(markerCorners[0][0].x-markerCorners[0][3].x));
-				theta /= 2.0;
+				theta /= 2.0; // average
 				pixelpos.theta = theta;
 			}
-			else{
+			else{	// if not the right marker detected:
 				pixelpos.x = -1;
 				pixelpos.y = -1;
 				pixelpos.theta = -10;
@@ -185,12 +204,13 @@ public:
 			}
 
 		}
-		else{
+		else{	// if nothing detected:
 			pixelpos.x = -1;
 			pixelpos.y = -1;
 			pixelpos.theta = -10;
 			detectflag = false;
 		}
+		// Delay the sending of the pixel position message:
 		gettimeofday(&t2, NULL);
 		elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
 		elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
@@ -200,12 +220,10 @@ public:
 			elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
 		}
 
-
+		// Send the position and angle of the marker
 		pixelpos_pub_.publish(pixelpos);
-//		ROS_INFO("time of detection: %f", elapsedTime);
 
-
-// Calculate target size
+		// Calculate marker size:
 		if(detectflag){
 			v01 = markerCorners[0][1] - markerCorners[0][0];
 			v03 = markerCorners[0][3] - markerCorners[0][0];
@@ -213,42 +231,43 @@ public:
 			v23 = markerCorners[0][3] - markerCorners[0][2];
 			area1 = fabs(v01.x*v03.y - v01.y*v03.x);
 			area2 = fabs(v21.x*v23.y - v21.y*v23.x);
+			// Assign the marker size to the message:
 			fandzmsg.data[2] = sqrt((area1+area2)/2.0);
-//			ROS_INFO("area1	%f", area1);
 		}
-/*
-// Draw markers on frame and display
-		cv::aruco::drawDetectedMarkers(grayFrame,markerCorners,markerIds);
-		cv::imshow(winName,grayFrame);
-		cv::waitKey(1);
-*/
-// clean the vectors containing informationa about the detected markers
+		// clean the vectors containing informationa about the detected markers
 		markerCorners.clear();
 		markerIds.clear();
 
-// these messages are all in focus_and_zoom
-
+		// Apply the focus measure algorithm on the detected object:
 		if(detectflag && (fandzmsg.data[2]>3)){
-		focusmeasure = LaplaceVarFocus(grayFrame(cv::Rect(round(pixelpos.x-6*fandzmsg.data[2]/2.0),round(pixelpos.y-6*fandzmsg.data[2]/2.0), round(6*fandzmsg.data[2]), round(6*fandzmsg.data[2]))&cv::Rect(0,0,frWidth-1,frHeight-1)));
+		sharpnessmeasure = LaplaceVarFocus(grayFrame(cv::Rect(round(pixelpos.x-6*fandzmsg.data[2]/2.0),round(pixelpos.y-6*fandzmsg.data[2]/2.0), round(6*fandzmsg.data[2]), round(6*fandzmsg.data[2]))&cv::Rect(0,0,frWidth-1,frHeight-1)));
 		}
-		else focusmeasure = LaplaceVarFocus(grayFrame);
-
+		else sharpnessmeasure = LaplaceVarFocus(grayFrame); // If not detected on whole frame
+		// Assign the detectflag and the sharpness measure to the message:
 		fandzmsg.data[0] = detectflag;
-		fandzmsg.data[1] = focusmeasure;
+		fandzmsg.data[1] = sharpnessmeasure;
 
 		focus_and_zoom_pub_.publish(fandzmsg);
 	}
+	// END Image callback
+	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 };
 
+// END Aruco Marker Detection Class
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-
-
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+// Main function
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 int main(int argc, char **argv)
 {
 
 	ros::init(argc, argv, "singlemarkerdetection_node");
+	// construct object of Aruco Marker Detection Class:	
 	ArucoDet ad;
+	// Constantly call the callbacks:
 	ros::spin();
 	return 0;
 }
-
+// END Main function
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
