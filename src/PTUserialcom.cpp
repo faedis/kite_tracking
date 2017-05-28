@@ -71,21 +71,21 @@ public:
 	void ptucmdCb(const geometry_msgs::Pose2D::ConstPtr& ptucmd){
 		panSpeed = ptucmd->x;
 		tiltSpeed = ptucmd->y;
-		gettimeofday(&t1, NULL);
+//		gettimeofday(&t1, NULL);
 //		set_desired(PAN, SPEED, &panSpeed, ABSOLUTE);
 //		ROS_INFO("ptu cmd");
-		nk1 = nk_timestamp();
+//		nk1 = nk_timestamp();
 		char answer = ptu_set_desired_velocities(panSpeed, tiltSpeed);
 		if(answer!=0){
 			ROS_INFO("error on vel sending:	%c", answer);
 		}
 //		ROS_INFO("cmd sent");
 //		ROS_INFO("velocity cmd:	%d", panSpeed);
-		gettimeofday(&t2, NULL);
-		nk2 = nk_timestamp();
-		elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
-		elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
-		ROS_INFO("cmd sent %f	%d",elapsedTime, nk2-nk1);
+//		gettimeofday(&t2, NULL);
+//		nk2 = nk_timestamp();
+//		elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+//		elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
+//		ROS_INFO("cmd sent %f	%d	%d	%d",elapsedTime, nk2-nk1, panSpeed, tiltSpeed);
 	}
 	// get PTU position and publish
 	void grabbedCb(const std_msgs::Bool::ConstPtr& grabbed){
@@ -107,19 +107,20 @@ public:
 		}
 */
 //		ROS_INFO("		query pos");
-		gettimeofday(&t1, NULL);
+//		gettimeofday(&t1, NULL);
 //		s_ros = ros::Time::now();
 //		ROS_INFO("		pos query");
-		nk1 = nk_timestamp();
+//		nk1 = nk_timestamp();
 		char answer = get_current_positions(pPtr,tPtr);
 		if(answer==0){
 		ROS_INFO("error on pos reading:	%c", answer);
 		}
-		gettimeofday(&t2,NULL);
-		elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
-		elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
-		nk2 = nk_timestamp();
-		ROS_INFO("query sent %f	%d",elapsedTime, nk2-nk1);
+//		gettimeofday(&t2,NULL);
+//		elapsedTime = (t2.tv_sec - t1.tv_sec)*1000.0;      // sec to ms
+//		elapsedTime += (t2.tv_usec - t1.tv_usec)/1000.0;   // us to ms
+//		nk2 = nk_timestamp();
+//		ROS_INFO("query sent %f	%d",elapsedTime, nk2-nk1);
+
 		ptupos.x = *pPtr;
 		ptupos.y = *tPtr;
 		ptupos.theta = 0;
@@ -197,7 +198,8 @@ int main( int argc, char** argv ) {
 		cin>>dummyvar;		// tilt reg move power, tilt min pos, t max pos, p m pos,
 		// p x pos, user limits enabled, disable reset on restart,
 		//t acc, p acc, p upper speed limit, t u s l
-		if (SerialStringOut(COMstream, (unsigned char *)"RD TML PML A TNU-10 LU TXU2250 LU A PNU-2000 LU PXU2000 LU A TA25000 PA12500 PU5000 TU5000 ") != TRUE) { //TA50000 PA25000
+		reset_PTU_parser(2000);
+		if (SerialStringOut(COMstream, (unsigned char *)"RD TML PML A TNU-10 LU TXU2250 LU A PNU-2000 LU PXU2000 LU A PU3500 TU3500 TA2000 PA2000 ") != TRUE) { //TA50000 PA25000
 			cout << "2nd Serial command not sent to PTU \n";
 		}
 
@@ -237,28 +239,53 @@ int main( int argc, char** argv ) {
 		}
 		cout << "Base speed pan: " << (short)get_current(PAN, BASE) << "\n";
 		cout << "Base speed tilt: " << (short)get_current(TILT, BASE) << "\n";
-		//// acceleration
-		//val = 200000;
-		//if (set_desired(PAN, ACCELERATION, (PTU_PARM_PTR *)&val, ABSOLUTE) != PTU_OK) {
-		//	cout << "Acceleration pan could not be set!\n";
-		//}
-		//if (set_desired(TILT, ACCELERATION, (PTU_PARM_PTR *)&val, ABSOLUTE) != PTU_OK) {
-		//	cout << "Acceleration pan could not be set!\n";
-		//}
-		//// speed limits
-		//val = 10000;
-		//if (set_desired(PAN, UPPER_SPEED_LIMIT, (PTU_PARM_PTR *)&val, ABSOLUTE) != PTU_OK) {
-		//	cout << "Upper speed limit pan could not be set!\n";
-		//}
-		//if (set_desired(TILT, UPPER_SPEED_LIMIT, (PTU_PARM_PTR *)&val, ABSOLUTE) != PTU_OK) {
-		//	cout << "Upper speed limit pan could not be set!\n";
-		//}
+		////////
+		reset_PTU_parser(2000);
+		if (SerialStringOut(COMstream, (unsigned char *)"RD TML PML A TNU-10 LU TXU2250 LU A PNU-2000 LU PXU2000 LU A PU3500 TU3500 TA2000 PA2000 ") != TRUE) { //TA50000 PA25000
+			cout << "2nd Serial command not sent to PTU \n";
+		}
+
+		reset_PTU_parser(2000); // needed for changing between direct serial comm and cpi commands
+								// set pure velocity mode
+/*		if (set_mode(POSITION_LIMITS_MODE,ON_MODE) == PTU_OK){
+			cout << "Position limits enabled \n";
+		}
+*/
+		if (set_mode(SPEED_CONTROL_MODE, PTU_PURE_VELOCITY_SPEED_CONTROL_MODE) == PTU_OK) {
+			cout << "Speed mode set to pure velocity \n";
+		}
+		if (set_mode(COMMAND_EXECUTION_MODE, EXECUTE_IMMEDIATELY) == PTU_OK) {
+			cout << "Command execution mode set to immediate execution mode \n";
+		}
+		maxPos = 0;
+		maxPos = (short)get_current(PAN, MAXIMUM_POSITION);
+		cout << "Pan maximum Position " << maxPos << "\n";
+		maxPos = 0;
+		maxPos = (short)get_current(PAN, MINIMUM_POSITION);
+		cout << "Pan minimum Position " << maxPos << "\n";
+		maxPos = 0;
+		maxPos = (short)get_current(TILT, MAXIMUM_POSITION);
+		cout << "Tilt maximum Position " << maxPos << "\n";
+		maxPos = 0;
+		maxPos = (short)get_current(TILT, MINIMUM_POSITION);
+		cout << "Tilt minimum Position " << maxPos << "\n";
+		//  base speed:
+		
+		 val = 58; 
+		if (set_desired(PAN, BASE, (PTU_PARM_PTR *)&val, ABSOLUTE) != PTU_OK) {
+			cout << "Pan base speed could not be set \n";
+		}
+		val = 58;
+		if (set_desired(TILT, BASE, (PTU_PARM_PTR *)&val, ABSOLUTE) != PTU_OK) {
+			cout << "Tilt base speed could not be set \n";
+		}
+		cout << "Base speed pan: " << (short)get_current(PAN, BASE) << "\n";
+		cout << "Base speed tilt: " << (short)get_current(TILT, BASE) << "\n";
 	}
 
 
 	ros::init(argc, argv, "ptuserialcom_node");
 	PTUSubAndPub ptusap;
-	gettimeofday(&t10,NULL);
 	ros::spin();
 
 

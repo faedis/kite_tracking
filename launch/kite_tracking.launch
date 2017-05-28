@@ -11,34 +11,34 @@
 	<node name="singlemarkerdetection" pkg="kite_tracking" type="singlemarkerdetection_node" output="screen">
 		<param name="dictNumber" value="1" type="int"/>
 		<param name="markerSize" value="3" type="int"/>	
-		<param name="artDelay" value = "40" type="double"/>	
+		<param name="artDelay" value = "29" type="double"/>	
 	</node>
 
 	<!-- node name="KCFtracker" pkg="kite_tracking" type="kcftracker_node" output="screen" -->
 		<!-- param name="roiSize" value="60" type="int"/ -->
 		<!-- param name="distanceLimit" value="30" type="int"/ -->
-		<!-- param name= "trackingDelay" value="8" type="double"/ -->
+		<!-- param name= "trackingDelay" value="29" type="double"/ -->
 	<!-- /node -->
 
 	<node name="lqr" pkg="kite_tracking" type="LQR_node" output="screen">
 		<param name="pRes" value="0.0004487988119946330" type="double"/>
 		<param name="tRes" value="0.0002243994059973165" type="double"/>
-		<param name="tolerance" value="6" type="int"/>
-		<param name="K1" value="3.1448" type="double"/>
-		<param name="K2" value="0.6103" type="double"/>
-		<param name="Mx1" value="0.8181" type="double"/>
-		<param name="Mx2" value="16.9903" type="double"/>
-		<param name="My1" value="0.6867" type="double"/>
-		<param name="My2" value="10.7716" type="double"/>
+		<param name="tolerance" value="3" type="int"/>
+		<param name="K1" value="4.9159" type="double"/>
+		<param name="K2" value="1.0256" type="double"/>
+		<param name="Mx1" value="0.9704" type="double"/>
+		<param name="Mx2" value="13.7185" type="double"/>
+		<param name="My1" value="0.9704" type="double"/>
+		<param name="My2" value="13.7185" type="double"/>
 		<param name="mapFilePath" value="$(find kite_tracking)/src/angleOfViewLabScale.txt" type="str"/>
 	</node>
 
 	<node name="arduinoserial" pkg="kite_tracking" type="arduinoserialcom_node" output="screen">
 		<param name="focmin" value="650" type="int"/>	
-		<param name="focmax" value="785" type="int"/>		
-		<param name="focusstep" value="5" type="int"/>
+		<param name="focmax" value="780" type="int"/>		
+		<param name="focusstep" value="3" type="int"/>
 		<param name="focusscanstep" value="10" type="int"/>	
-		<param name="tsizeUpperThrshld" value="15" type="int"/>				
+		<param name="tsizeUpperThrshld" value="32" type="int"/>				
 		<param name="tsizeLowerThrshld" value="10" type="int"/>
 		<param name="serial_path" value="/dev/ttyACM0" type="str"/>
 	</node>

@@ -76,7 +76,7 @@ int markerSize = 3;
 std::vector< int > markerIds;
 std::vector<std::vector<cv::Point2f> > markerCorners, rejectedCandidates;
 cv::Point2f v01, v03, v21, v23;
-float area1, area2;
+float area1 = 100, area2 = 100;
 //cv::aruco::DetectorParameters parameters;
 cv::Ptr<cv::aruco::DetectorParameters> parameters = cv::aruco::DetectorParameters::create();
 

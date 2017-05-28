@@ -120,8 +120,8 @@ double elapsedTime;
 bool errorarrived = false, ptuposarrived = false;
 bool firstloop = true, secondloop = true, thirdloop = true;
 bool PTUctrl = false;
-double alphaX = 0.079555; // correction  by measurements 1.055
-double alphaY = 0.044814; // correction  by measurements 1.021
+double alphaX = 0.079781;
+double alphaY = 0.044942;
 std::string mapFilePath = "/home/guetgf/catkin_ws/src/kite_tracking/src/angleOfViewLabScale.txt";
 double pRes = 92.5714 / 3600.0 * M_PI / 180.0;
 double tRes = 46.2857 / 3600.0 * M_PI / 180.0;
@@ -129,11 +129,12 @@ int frWidth = 640;
 int frHeight = 360;
 int hWidth = frWidth/2;
 int hHeight = frHeight/2;
-int uXmax= 5000, uXmin = 60;		// pan input limits pos/second
-int uYmax =5000, uYmin = 60;		// tilt input limits pos/second
-int deltaUXmax  = 200; //= 400;				// pan input rate limit pos/Ts
-int deltaUYmax = 400;				// tilt input rate limit pos/Ts
+int uXmax= 3500, uXmin = 60;		// pan input limits pos/second
+int uYmax =3500, uYmin = 60;		// tilt input limits pos/second
+int deltaUXmax  = 250; //= 400;				// pan input rate limit pos/Ts
+int deltaUYmax = 250;				// tilt input rate limit pos/Ts
 int tolerance = 6;				// pixel		(other approach:0.00244; // rad)
+bool detected = false;
 
 std::vector<double> timeVec;
 std::vector<double> exVec;
@@ -154,11 +155,17 @@ std::vector<double> timePosVec;
 std::vector<double> xhatVec;
 std::vector<double> x1hatVec;
 std::vector<double> x2hatVec;
-std::vector<double> rhatVec;
-std::vector<double> r1hatVec;
-std::vector<double> r2hatVec;
+std::vector<double> yhatVec;
+std::vector<double> y1hatVec;
+std::vector<double> y2hatVec;
+std::vector<double> rxhatVec;
+std::vector<double> rx1hatVec;
+std::vector<double> rx2hatVec;
+std::vector<double> ryhatVec;
+std::vector<double> ry1hatVec;
+std::vector<double> ry2hatVec;
 std::vector<double> tsizeVec;
-
+std::vector<bool>	ptuarrivedVec;
 
 //additional end!!!
 
@@ -191,18 +198,18 @@ ouY = 0;				// old input tilt in ptu positions/second
 
 // Constants
 double
-K1 = 3.1448,//3.1448,//2.4978,//			// LQR gain 1
-K2 = 0.6103,//0.6103,//0.4593,//			// LQR gain 2
-Ts = 0.03333;			// sampling time
+K1 = 4.9159,//3.1448,//2.4978,//			// LQR gain 1
+K2 = 1.0256,//0.6103,//0.4593,//			// LQR gain 2
+Ts = 0.06666;			// sampling time
 int fps = 60;
 
 // kalman filter parameters
 // reference
 double
-Mx1 = 0.8181,//0.8181,			// current values corresond to Q = 100, R = 0.00007
-Mx2 = 16.9903,//16.9903,
-My1 = 0.6867,//0.6867,			// current values corresond to Q = 100, R = 0.0003
-My2 = 10.7716;//10.7716, 
+Mx1 = 0.9704,//0.8181,			// current values corresond to Q = 100, R = 0.00007
+Mx2 = 13.7185,//16.9903,
+My1 = Mx1,//0.6867,			// current values corresond to Q = 100, R = 0.0003
+My2 = Mx2;//10.7716, 
 
 
 
@@ -291,30 +298,21 @@ public:
 		std::vector<double> angleOfViewXVec, angleOfViewYVec;
 		int tempz;
 		double tempx, tempy;
-		std::ifstream inputfile(mapFilePath);
-		if (inputfile.is_open())
-		{
-		while (inputfile >> tempz)
-		{
-			inputfile >> tempx;
-			inputfile >> tempy;
-			zoomLevelVec.push_back(tempz);
-			angleOfViewXVec.push_back(tempx);
-			angleOfViewYVec.push_back(tempy);
-		}
-		inputfile.close();
+		std::ifstream inputfile(mapFilePath.c_str());
+		if (inputfile.is_open()){
+			while (inputfile >> tempz){
+				inputfile >> tempx;
+				inputfile >> tempy;
+				zoomLevelVec.push_back(tempz);
+				angleOfViewXVec.push_back(tempx);
+				angleOfViewYVec.push_back(tempy);
+			}
+			inputfile.close();
 		}
 		else{
 			ROS_INFO("Unable to open file\n shutdown");
 			ros::shutdown();
 		}
-		if(fps == 30){
-			K1 = 2.858;
-			K2 = 0.7821;
-			Mx1 = 0.9704;
-			Mx2 = 13.7185;
-		}
-
 		kx.kalmanInit(Ts, Mx1, Mx2);
 		ky.kalmanInit(Ts, My1, My2);
 		krx.kalmanInit(Ts, Mx1, Mx2);
@@ -332,6 +330,7 @@ public:
 	~LQR(){
 	}
 	void pixelposCb(const geometry_msgs::Pose2D::ConstPtr& pixelpos){
+//	ROS_INFO("pixelCb");
 //	void comparedpixelposCb(const geometry_msgs::Pose2D::ConstPtr& comparedpixelpos){
 		if(true){ //ptuposarrived
 //			pixelX = comparedpixelpos->x;
@@ -344,12 +343,17 @@ public:
 			// assign errors
 			eX = -alphaX * (pixelX - (double)hWidth) / (double)hWidth;
 			eY = -alphaY * (pixelY - (double)hHeight) / (double)hHeight;
+			detected = true;
 			}
+			else detected = false;
 
 
 
 			// update and publish target position if all information has arrvied
 			errorarrived = true;
+			if(PTUctrl){
+				ptuarrivedVec.push_back(ptuposarrived);
+			}
 			if(ptuposarrived){
 				orX = rX;
 				orY = rY;
@@ -358,8 +362,8 @@ public:
 					rY = oyY+eY;
 				}
 				else{
-					rX = 0.98*rX;
-					rY = 0.98*rY;
+					rX = 0.95*rX;
+					rY = 0.95*rY;
 					pixelX = (double)hWidth;
 					pixelY = (double)hHeight;
 				}
@@ -374,9 +378,10 @@ public:
 				if(PTUctrl){
 				// Specific Reference Signal:
 					if(speccount<rspec.size()){
-						rX = rspec[speccount];
 						rY = 0;
+						rX = rspec[speccount];
 						eX = rX - yX;
+						eY = rY - yY;
 					}
 					else{
 						rX = orX;
@@ -415,18 +420,21 @@ public:
 					rY = oyY+eY;
 				}
 				else{
-					rX = 0.98*rX;
-					rY = 0.98*rY;
+					rX = 0.95*rX;
+					rY = 0.95*rY;
 					pixelX = (double)hWidth;
 					pixelY = (double)hHeight;
 				}
-				ROS_INFO("pos not arrived!!");
-/*				if(PTUctrl){
+//				ROS_INFO("pos not arrived!!");
+
+/*
+				if(PTUctrl){
 				// Specific Reference Signal:
 					if(speccount<rspec.size()){
-						rX = rspec[speccount];
 						rY = 0;
+						rX = rspec[speccount];
 						eX = rX - yX;
+						eY = rY - yY;
 					}
 					else{
 						rX = orX;
@@ -438,6 +446,7 @@ public:
 				}
 
 */
+
 
 				ptuposarrived = false;
 				targetpos.x = rX;
@@ -497,10 +506,10 @@ public:
 
 				uX = round(uXrad/pRes);
 				uY = round(uYrad/tRes);
-		
+
 				// input limits:
 				if(fabs(uX)<uXmin){
-					if(fabs(pixelX-hWidth)>(double)tolerance){//
+					if(fabs(pixelX-hWidth)>(double)tolerance*3){//
 						uX = copysign(uXmin,uX);
 					}
 					else uX = 0;
@@ -524,7 +533,7 @@ public:
 					else uX = ouX - deltaUXmax;
 					// correct small velocities (otherwise speed would be increased again
 					if(fabs(uX)<uXmin){
-						if(fabs(pixelX-hWidth)>(double)tolerance){//
+						if(fabs(pixelX-hWidth)>(double)tolerance*3){//
 							uX = copysign(uXmin,ouX);
 							if(fabs(uX-ouX)>deltaUXmax){
 								if(fabs(ouX)>deltaUXmax) uX = copysign(uXmin,ouX);
@@ -552,6 +561,9 @@ public:
 					}
 				}		
 
+				if((uX== 0) && (abs(ouX)>94)) uX = copysign(uXmin,ouX);
+				if((uY== 0) && (abs(ouY)>94)) uY = copysign(uYmin,ouY);
+
 				// Additioinal input rate limit:
 /*				if(abs(uX)<abs(ouX)){
 					if(abs(uX-ouX)<59){
@@ -568,7 +580,6 @@ public:
 				uYrad = round(uY)*tRes;
 				ouXrad = uXrad;
 				ouYrad = uYrad;
-
 				ptucmd.x = round(uX); //floor
 				ptucmd.y = round(uY); //floor
 				ptucmd.theta = 0;
@@ -577,24 +588,36 @@ public:
 				if(collectdata){
 					timeVec.push_back(elapsedTime);
 					exVec.push_back(eX);
-//					eyVec.push_back(eY);
+					eyVec.push_back(eY);
 					uxVec.push_back(uXrad);//uxVec.push_back(uXrad);
-//					uyVec.push_back(uYrad);
+					uyVec.push_back(uYrad);
 //					yfxVec.push_back(kx.getestimate());
 //					yfyVec.push_back(ky.getestimate());
 					panposVec.push_back(yX);
-//					tiltposVec.push_back(yY);
+					tiltposVec.push_back(yY);
+//					if(!detected){
+//					targetX.push_back(0);
+//					targetY.push_back(0);
+//					}
+//					else{
 					targetX.push_back(rX);
-//					targetY.push_back(rY);
+					targetY.push_back(rY);
+//					}
 //					rfxVec.push_back(krx.getestimate());
 //					rfyVec.push_back(kry.getestimate);
 					// additional
-					rhatVec.push_back(krx.getestimate());
+					rxhatVec.push_back(krx.getestimate());
+					rx1hatVec.push_back(krx.getstate1());
+					rx2hatVec.push_back(krx.getstate2());
+					ryhatVec.push_back(kry.getestimate());
+					ry1hatVec.push_back(kry.getstate1());
+					ry2hatVec.push_back(kry.getstate2());
 					xhatVec.push_back(kx.getestimate());
-					r1hatVec.push_back(krx.getstate1());
-					r2hatVec.push_back(krx.getstate2());
 					x1hatVec.push_back(kx.getstate1());
 					x2hatVec.push_back(kx.getstate2());
+					yhatVec.push_back(ky.getestimate());
+					y1hatVec.push_back(ky.getstate1());
+					y2hatVec.push_back(ky.getstate2());
 //					tsizeVec.push_back(tsize);
 				}
 
@@ -622,6 +645,7 @@ public:
 					}
 				}	
 				// send ptucmd
+
 				ptucmd.x = uX;
 				ptucmd.y = uY;
 				ptucmd.theta = 0;
@@ -639,6 +663,7 @@ public:
 		//update states yx, yy and old ones
 //		ROS_INFO("		lqr rec");
 		if(errorarrived){
+//			ROS_INFO("pos update");
 			oyX = yX;
 			yX = ptupos->x * pRes;
 			oyY = yY;
@@ -659,7 +684,7 @@ public:
 		if(writedata){
 				writedata = false;
 				std::stringstream ss;
-				ss << "SpecR_" <<std::setfill('0')<<std::setw(3)<<
+				ss << "PanLQRComparison_" <<std::setfill('0')<<std::setw(3)<<
 					filenumber <<".txt";
 				std::string filename = ss.str();
 				myfile.open(filename.c_str());
@@ -682,21 +707,32 @@ public:
 						std::setprecision(14) << timePosVec[i] << "\n";
 				}
 */
-				myfile << "t, ex, ux, yx, x_hat, x1_hat, x2_hat, r, r_hat, r1_hat, r2_hat, tsize, tp\n";
+				myfile << "t, ex, ey, ux, uy, x, y, x_hat, x1_hat, x2_hat, y_hat, y1_hat, y2_hat,rx, ry, rx_hat, rx1_hat, rx2_hat, ry_hat, ry1_hat, ry2_hat, tp, ptuarrived\n";
 				for (int i = 0; i < timeVec.size(); i++) {
 					myfile << std::setprecision(14) << timeVec[i] << "," <<
-//						std::setprecision(8) << exVec[i] << "," <<
-						std::setprecision(8) << uxVec[i] << "," <<
-						std::setprecision(8) << panposVec[i] << "," <<
-						std::setprecision(8) << xhatVec[i] << "," <<
-						std::setprecision(8) << x1hatVec[i] << "," <<
-						std::setprecision(8) << x2hatVec[i] << "," <<
-						std::setprecision(8) << targetX[i] << "," <<
-						std::setprecision(8) << rhatVec[i] << "," <<
-						std::setprecision(8) << r1hatVec[i] << "," <<
-						std::setprecision(8) << r2hatVec[i] << "," <<
+						std::setprecision(6) << exVec[i] << "," <<
+						std::setprecision(6) << eyVec[i] << "," <<
+						std::setprecision(6) << uxVec[i] << "," <<
+						std::setprecision(6) << uyVec[i] << "," <<
+						std::setprecision(6) << panposVec[i] << "," <<
+						std::setprecision(6) << tiltposVec[i] << "," <<
+						std::setprecision(6) << xhatVec[i] << "," <<
+						std::setprecision(6) << x1hatVec[i] << "," <<
+						std::setprecision(6) << x2hatVec[i] << "," <<
+						std::setprecision(6) << yhatVec[i] << "," <<
+						std::setprecision(6) << y1hatVec[i] << "," <<
+						std::setprecision(6) << y2hatVec[i] << "," <<
+						std::setprecision(6) << targetX[i] << "," <<
+						std::setprecision(6) << targetY[i] << "," <<
+						std::setprecision(6) << rxhatVec[i] << "," <<
+						std::setprecision(6) << rx1hatVec[i] << "," <<
+						std::setprecision(6) << rx2hatVec[i] << "," <<
+						std::setprecision(6) << ryhatVec[i] << "," <<
+						std::setprecision(6) << ry1hatVec[i] << "," <<
+						std::setprecision(6) << ry2hatVec[i] << "," <<
 //						std::setprecision(8) << tsizeVec[i] << "," <<
-						std::setprecision(14) << timePosVec[i] << "\n";
+						std::setprecision(14) << timePosVec[i] << ","
+						<< ptuarrivedVec[i] << "\n";
 				}
 				myfile.close();
 				ROS_INFO("Data Written to File\n");
@@ -745,9 +781,9 @@ public:
 					rfyVec.clear();
 					// additional!!
 					timePosVec.clear();
-					rhatVec.clear();
-					r1hatVec.clear();
-					r2hatVec.clear();
+					rxhatVec.clear();
+					rx1hatVec.clear();
+					rx2hatVec.clear();
 					xhatVec.clear();
 					x1hatVec.clear();
 					x2hatVec.clear();
@@ -777,17 +813,19 @@ public:
 	}
 
 	void zoomlevelCb(const std_msgs::Int16::ConstPtr& zoomlevel){
-		ROS_INFO("zoomlevelCb, zoomleveldata: %d", zoomlevel->data);
-		auto searchX = mapAngleOfViewX.find(zoomlevel->data);
+//		ROS_INFO("zoomlevelCb, zoomleveldata: %d", zoomlevel->data);
+		//auto searchX = mapAngleOfViewX.find(zoomlevel->data);
+		std::map<int,double>::iterator searchX= mapAngleOfViewX.find(zoomlevel->data);
 		if( searchX != mapAngleOfViewX.end()){
 			alphaX = searchX->second;
 		}
-		auto searchY = mapAngleOfViewY.find(zoomlevel->data);
+		//auto searchY = mapAngleOfViewY.find(zoomlevel->data);
+		std::map<int,double>::iterator searchY = mapAngleOfViewY.find(zoomlevel->data);
 		if( searchY != mapAngleOfViewY.end()){
 			alphaY = searchY->second;
-		ROS_INFO("new alphaX/alphaY:	%f	%f",alphaX,alphaY);
+//		ROS_INFO("new alphaX/alphaY:	%f	%f",alphaX,alphaY);
 		}
-
+		ROS_INFO("%f	%d",elapsedTime,zoomlevel->data);
 	}
 
 	void setframeprops(int width, int height){
@@ -800,7 +838,6 @@ public:
 };
 
 int main(int argc, char **argv){
-	std::string angleOfViewFile;
 /*	if(argc == 2){
 		angleOfViewFile = argv[1];
 	}
@@ -890,25 +927,59 @@ int main(int argc, char **argv){
 		rspec.push_back(0.401);
 	}	
 */
-
+/*
+	// Pan
 	double a = 0.5;
-	for (int i = 0; i<11; i++){
+
+
+	for (int i = 0; i<20; i++){
+		rspec.push_back(0);
+	}
+	for (int i = 0; i<40;i++){
+		rspec.push_back(0.07);
+	}
+	for (int i = 0; i<40; i++){
 		rspec.push_back(0.0);
 	}
-	for (int i = 0; i <16; i++){
-		rspec.push_back((double)i*a/15.0);
+	for (int i = 0; i<36; i++){
+		rspec.push_back(-a/2*cos((double)i*2.0/72.0*M_PI) + a/2);
+	}
+	for (int i = 0; i<255; i++){
+		rspec.push_back(a*cos((double)i*2.0/60*M_PI));
+	}
+	for (int i = 0; i <45; i++){
+		rspec.push_back(0);
 	}
 
-	for (int i = 0; i<180; i++){
-		rspec.push_back(a*cos((double)i*2.0*M_PI/90.0));
+*/
+
+/* //tilt!!
+	double a = 0.17;
+	double b = 0.25; // offset of tilt
+	for(int i = 0; i<25; i++){
+		rspec.push_back(i*b/25.0);
+	}
+	for (int i = 0; i<40; i++){
+		rspec.push_back(b);
+	}
+	for (int i = 0; i<20; i++){
+		rspec.push_back(b-a/2.0*cos((double)i*2.0/40.0*M_PI)+a/2.0);
+	}
+	for (int i = 0; i<160; i++){
+		rspec.push_back(b+a*cos((double)i*2.0/40.0*M_PI));
+	}
+	for (int i = 0; i<10; i++){
+		rspec.push_back(b+a*cos((double)i*2.0/40.0*M_PI));
 	}
 	for (int i = 0; i <30; i++){
-		rspec.push_back(a-((double)i*a/30.0));
+		rspec.push_back(b);
 	}
-	for(int i = 0; i<rspec.size();i++){
+*/
+
+/*	for(int i = 0; i<rspec.size();i++){
 		std::cout << rspec[i] <<"\n";
 	}
-
+*/
 
 	ros::init(argc,argv,"LQR_node");
 
