@@ -53,17 +53,12 @@ private:
 	ros::Subscriber grabbed_sub_;
 
 	geometry_msgs::Pose2D ptupos;
-	
+
 	signed short int panSpeed, tiltSpeed, rehomespeed = 500, panZero = 0, tiltZero=0;
-	signed short pPos = 0;
-	signed short tPos = 0;
-	signed short* pPtr = &pPos;
-	signed short* tPtr = &tPos;
-	struct timeval t1, t2;
-	double elapsedTime=0, elapsedTime2 = 0;
-	nk_time nk1 =0, nk2 = 0, dnk;
-	ros::Time s_ros, e_ros;
-	double elapsedRos = 0;
+	signed short pPos = 0;		// position of the pan axis, positions
+	signed short tPos = 0;		// position of the tilt axis, positions
+	signed short* pPtr = &pPos;	// pointer to position of the pan axis, positions
+	signed short* tPtr = &tPos;	// pointer to position of the tilt axis, positions
 public:
 	PTUSubAndPub(){
 		// publisher:

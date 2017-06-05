@@ -223,9 +223,9 @@ ouX = 0,				// old input pan, positions/second
 ouY = 0;				// old input tilt, positions/second
 double
 K1 = 4.9159,			// LQR gain K_1
-K2 = 1.0256,			// LQR gain K_2
+K2 = 1.0256;			// LQR gain K_2
 int fps = 30;			// frames per second
-Ts = 2.0/(double)fps;	// sampling time
+double Ts = 2.0/(double)fps;	// sampling time
 
 // kalman filter parameters:
 double
@@ -734,7 +734,7 @@ public:
 				// start time measurment:
 				gettimeofday(&t1, NULL);
 				// start collecting data:
-				collectdata ^= true;
+				collectdata  = false;//^= true;
 				// make sure the loop starts with a position measurement:
 				errorarrived = true;
 				ptuposarrived = false;

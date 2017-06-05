@@ -2,7 +2,6 @@
 	<node name="camera" pkg="kite_tracking" type="camera_node" output="screen">
 		<param name="frWidth" value="640" type="int"/>
 		<param name="frHeight" value="360" type="int"/>
-		<param name="fps" value="30" type="int"/>
 		<param name="cameraNumber" value="0" type="int"/>
 	</node>
 
@@ -14,11 +13,6 @@
 		<param name="artDelay" value = "29" type="double"/>	
 	</node>
 
-	<!-- node name="KCFtracker" pkg="kite_tracking" type="kcftracker_node" output="screen" -->
-		<!-- param name="roiSize" value="60" type="int"/ -->
-		<!-- param name="distanceLimit" value="30" type="int"/ -->
-		<!-- param name= "trackingDelay" value="29" type="double"/ -->
-	<!-- /node -->
 
 	<node name="lqr" pkg="kite_tracking" type="LQR_node" output="screen">
 		<param name="pRes" value="0.0004487988119946330" type="double"/>

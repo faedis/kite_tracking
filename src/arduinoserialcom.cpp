@@ -99,7 +99,6 @@ public:
 		shutdownkey_sub_ = nh_.subscribe("shutdownkey",1,&ArduinoCom::shutdownCb,this);
 		
 		// Read in parameters that are defined in launch file:
-		else ROS_INFO("LQR param not found");
 		if(nh_.hasParam("arduinoserial/focmin")){
 			bool success = nh_.getParam("arduinoserial/focmin",focmin);
 			ROS_INFO("Read ardnuino parameter focmin, success: %d	%d",focmin, success);
